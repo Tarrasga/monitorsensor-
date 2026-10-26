@@ -58,7 +58,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SmartCool-Master-Telemetry-APK
-          path: AndroidApp/output/SmartCool-Master-Telemetry.apk
+          path: AndroidApp/output/*.apk
 
       - name: Publicar Release no GitHub
         uses: softprops/action-gh-release@v2
@@ -77,7 +77,7 @@ jobs:
             2. Quando o download terminar, toca no ficheiro para instalar.
             3. Se o Android pedir autorização, ativa "Permitir desta fonte" / "Instalar aplicações desconhecidas".
             4. Abre a aplicação **SmartCool** e o ecrã ficará sempre ligado a mostrar a telemetria do PC!
-          files: AndroidApp/output/SmartCool-Master-Telemetry.apk
+          files: AndroidApp/output/*.apk
           overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
