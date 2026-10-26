@@ -51,7 +51,8 @@ jobs:
         working-directory: AndroidApp
         run: |
           mkdir -p output
-          cp app/build/outputs/apk/debug/*.apk output/SmartCool-Master-Telemetry.apk
+          find . -name "*.apk" -exec cp {} output/SmartCool-Master-Telemetry.apk \;
+          ls -la output/
 
       - name: Guardar Artefacto APK
         uses: actions/upload-artifact@v4
@@ -63,8 +64,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: "v1.0.0"
-          name: "SmartCool Master Telemetry Android App v1.0.0"
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "SmartCool Master Telemetry Android App v1.0.${{ github.run_number }}"
           body: |
             ### 📱 Aplicação Android Oficial // Ecrã Sempre Ligado
             - **Ecrã NUNCA Desliga**: Configurado nativamente com `FLAG_KEEP_SCREEN_ON`.
