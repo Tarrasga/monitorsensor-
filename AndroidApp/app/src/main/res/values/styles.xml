@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.SmartCool.Fullscreen" parent="android:Theme.NoTitleBar.Fullscreen">
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+</resources>
