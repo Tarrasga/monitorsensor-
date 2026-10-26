@@ -54,6 +54,11 @@ public class MainActivity extends Activity {
         ImageButton btnSettings = findViewById(R.id.btnSettings);
         btnSettings.setOnClickListener(v -> showSettingsDialog());
 
+        View btnRetry = findViewById(R.id.btnRetry);
+        if (btnRetry != null) {
+            btnRetry.setOnClickListener(v -> loadDashboard());
+        }
+
         setupWebView();
         loadDashboard();
     }

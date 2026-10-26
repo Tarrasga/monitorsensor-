@@ -105,25 +105,38 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
                 display: block;
             }
         }
-        #fullscreen-btn {
+        .controls-bar {
             position: absolute;
-            bottom: 16px;
-            right: 16px;
-            background: rgba(18, 23, 34, 0.85);
+            bottom: 14px;
+            right: 14px;
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+            transition: opacity 0.3s ease, transform 0.2s;
+        }
+        .action-btn {
+            background: rgba(18, 23, 34, 0.9);
             color: #10b981;
             border: 1px solid #1e293b;
             padding: 8px 14px;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: bold;
             cursor: pointer;
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
-            transition: opacity 0.3s ease, transform 0.2s;
-            z-index: 100;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
-        #fullscreen-btn:active {
+        .action-btn:active {
             transform: scale(0.95);
+        }
+        .action-btn.apk-btn {
+            color: #38bdf8;
+            border-color: rgba(56, 189, 248, 0.4);
+            background: rgba(15, 23, 42, 0.9);
         }
         .fade-out {
             opacity: 0.15;
@@ -135,53 +148,128 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
             background: rgba(16, 185, 129, 0.2);
             border: 1px solid rgba(16, 185, 129, 0.4);
             color: #10b981;
-            padding: 4px 10px;
+            padding: 5px 12px;
             border-radius: 20px;
             font-size: 11px;
             font-weight: bold;
             letter-spacing: 0.5px;
-            pointer-events: none;
+            pointer-events: auto;
+            cursor: pointer;
+            z-index: 99;
+            transition: opacity 0.4s ease;
+        }
+        #wakelock-pill {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            background: rgba(14, 165, 233, 0.2);
+            border: 1px solid rgba(14, 165, 233, 0.4);
+            color: #38bdf8;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            pointer-events: auto;
+            cursor: pointer;
             z-index: 99;
             transition: opacity 0.4s ease;
         }
     </style>
 </head>
 <body>
-    <!-- Motor NoSleep: Vídeo silencioso contínuo que impede o Android de suspender o ecrã -->
-    <video id="nosleep-video" playsinline loop muted autoplay style="position:fixed; top:-999px; left:-999px; width:1px; height:1px; opacity:0.01; pointer-events:none;">
+    <!-- Motor NoSleep Triplo: Vídeo H.264 minúsculo visível ao compositor + Heartbeat Audio + WakeLock API -->
+    <video id="nosleep-video" playsinline webkit-playsinline loop muted autoplay style="position:fixed; bottom:2px; right:2px; width:4px; height:4px; opacity:0.01; pointer-events:none; z-index:9999;">
+        <source src="data:video/mp4;base64,AAAAHGZ0eXBpc29tAAAAAGlzb21tcDQxAAAACHZpZGVvAAAAAA==" type="video/mp4">
         <source src="data:video/webm;base64,GkXfo0AgQoaBAUL3gQFC8oEEQvOBCEKCQAR3ZWJtQoeBAkKFgQIYU4BnQI0VSalmQCgq17FAAw9CQE2AQAZ3aGFtbXlXQUAGd2hhbW15RIlACECPQAAAAAAAFlSua0AxrkAu14EBY8WBAZyBACK1nEADdW5khkAFVl9WUDglhohAA1ZQOIOBAeBABrCBCLqBCB9DtnVAIueBAKNAHIEAAIAwAQCdASoIAAgAAUAmJaQAA3AA/vz0AAA=" type="video/webm">
     </video>
 
     <div id="stream-container">
-        <div id="status-pill">● TELEMETRIA AO VIVO</div>
+        <div id="status-pill" onclick="toggleFullscreen()">● TELEMETRIA AO VIVO</div>
+        <div id="wakelock-pill" onclick="manualActivateScreenLock()">💡 ECRÃ: ATIVADO</div>
         <img id="dashboard-stream" src="/frame.jpg" alt="SmartCool Telemetry Dashboard">
         <div id="rotate-tip">🔄 Vira o telemóvel na horizontal (deitado) para ver em grande</div>
-        <button id="fullscreen-btn" onclick="toggleFullscreen()">⛶ TELA CHEIA</button>
+        <div class="controls-bar" id="controls-bar">
+            <a class="action-btn apk-btn" href="/download/app.apk" target="_blank" title="Instala a aplicação Android nativa que NUNCA desliga o ecrã">📱 APP ANDROID (.APK)</a>
+            <button class="action-btn" id="fullscreen-btn" onclick="toggleFullscreen()">⛶ TELA CHEIA</button>
+        </div>
     </div>
 
     <script>
-        // 1. Motor NoSleep (Garante que o ecrã NUNCA desliga no telemóvel/tablet)
-        const video = document.getElementById('nosleep-video');
-        function activateKeepScreenOn() {
-            if (video && video.paused) {
-                video.play().catch(() => {});
+        // 1. Motor NoSleep Universal (Impede que o ecrã do telemóvel/tablet desligue)
+        let audioCtx = null;
+        let wakeLock = null;
+
+        function startAudioPulse() {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                gain.gain.value = 0.00001;
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.05);
+            } catch(e) {}
+        }
+
+        async function activateKeepScreenOn() {
+            const vid = document.getElementById('nosleep-video');
+            if (vid) {
+                vid.play().catch(() => {});
             }
+            startAudioPulse();
+
             if ('wakeLock' in navigator) {
                 try {
-                    navigator.wakeLock.request('screen').catch(() => {});
-                } catch(e) {}
+                    if (!wakeLock || wakeLock.released) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        setLockStatus(true);
+                        wakeLock.addEventListener('release', () => {
+                            setLockStatus(false);
+                        });
+                    }
+                } catch(e) {
+                    setLockStatus(true, true);
+                }
+            } else {
+                setLockStatus(true, true);
             }
         }
 
+        function setLockStatus(active, fallback=false) {
+            const wl = document.getElementById('wakelock-pill');
+            if (!wl) return;
+            if (active) {
+                wl.innerText = fallback ? '💡 ECRÃ: SEMPRE LIGADO (ATIVO)' : '💡 ECRÃ: SEMPRE LIGADO ✓';
+                wl.style.color = '#10b981';
+                wl.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+            } else {
+                wl.innerText = '💡 ECRÃ: TOCA PARA ATIVAR';
+                wl.style.color = '#f59e0b';
+                wl.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+            }
+        }
+
+        function manualActivateScreenLock() {
+            activateKeepScreenOn();
+            setLockStatus(true);
+        }
+
         window.addEventListener('load', activateKeepScreenOn);
-        document.addEventListener('touchstart', activateKeepScreenOn);
-        document.addEventListener('click', activateKeepScreenOn);
+        document.addEventListener('touchstart', activateKeepScreenOn, {passive: true});
+        document.addEventListener('click', activateKeepScreenOn, {passive: true});
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 activateKeepScreenOn();
             }
         });
-        setInterval(activateKeepScreenOn, 15000);
+        setInterval(activateKeepScreenOn, 10000);
 
         // 2. Alternar Tela Cheia Imersiva
         function toggleFullscreen() {
@@ -189,40 +277,43 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                 const el = document.documentElement;
                 if (el.requestFullscreen) {
-                    el.requestFullscreen();
+                    el.requestFullscreen().catch(() => {});
                 } else if (el.webkitRequestFullscreen) {
-                    el.webkitRequestFullscreen();
+                    el.webkitRequestFullscreen().catch(() => {});
                 }
                 document.getElementById('fullscreen-btn').innerText = '🗗 SAIR';
             } else {
                 if (document.exitFullscreen) {
-                    document.exitFullscreen();
+                    document.exitFullscreen().catch(() => {});
                 } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
+                    document.webkitExitFullscreen().catch(() => {});
                 }
                 document.getElementById('fullscreen-btn').innerText = '⛶ TELA CHEIA';
             }
         }
 
-        // Esconder o botão suavemente após 3 segundos sem toques
-        const btn = document.getElementById('fullscreen-btn');
+        // Esconder os botões suavemente após 4 segundos sem toques
+        const bar = document.getElementById('controls-bar');
         const pill = document.getElementById('status-pill');
+        const wl = document.getElementById('wakelock-pill');
         let hideTimer;
         function resetFade() {
-            btn.classList.remove('fade-out');
-            pill.style.opacity = '1';
+            if (bar) bar.classList.remove('fade-out');
+            if (pill) pill.style.opacity = '1';
+            if (wl) wl.style.opacity = '1';
             clearTimeout(hideTimer);
             hideTimer = setTimeout(() => {
-                btn.classList.add('fade-out');
-                pill.style.opacity = '0.3';
-            }, 3000);
+                if (bar) bar.classList.add('fade-out');
+                if (pill) pill.style.opacity = '0.35';
+                if (wl) wl.style.opacity = '0.35';
+            }, 4000);
         }
-        document.addEventListener('touchstart', resetFade);
-        document.addEventListener('mousemove', resetFade);
-        document.addEventListener('click', resetFade);
+        document.addEventListener('touchstart', resetFade, {passive: true});
+        document.addEventListener('mousemove', resetFade, {passive: true});
+        document.addEventListener('click', resetFade, {passive: true});
         resetFade();
 
-        // 3. Motor de Atualização Contínua Ultra-Resiliente (Zero Dependências, Zero Bloqueios)
+        // 3. Motor de Atualização Contínua Ultra-Resiliente
         const streamImg = document.getElementById('dashboard-stream');
         let updateTimer = null;
 
@@ -407,6 +498,35 @@ class TelemetryRequestHandler(BaseHTTPRequestHandler):
                     self.wfile.write(qr_bytes)
                 else:
                     self.send_response(404)
+                    self.end_headers()
+
+            elif self.path.startswith('/download/app.apk') or self.path.startswith('/app.apk'):
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                apk_paths = [
+                    os.path.join(base_dir, 'AndroidApp', 'output', 'SmartCool-Master-Telemetry.apk'),
+                    os.path.join(base_dir, 'SmartCool-Master-Telemetry.apk'),
+                    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'SmartCool.apk')
+                ]
+                found_apk = None
+                for p in apk_paths:
+                    if os.path.exists(p):
+                        found_apk = p
+                        break
+
+                if found_apk:
+                    with open(found_apk, 'rb') as f:
+                        apk_data = f.read()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/vnd.android.package-archive')
+                    self.send_header('Content-Length', str(len(apk_data)))
+                    self.send_header('Content-Disposition', 'attachment; filename="SmartCool-Master-Telemetry.apk"')
+                    self.send_header('Connection', 'close')
+                    self.end_headers()
+                    self.wfile.write(apk_data)
+                else:
+                    self.send_response(302)
+                    self.send_header('Location', 'https://github.com/Tarrasga/monitorsensor-/releases')
+                    self.send_header('Connection', 'close')
                     self.end_headers()
 
             else:

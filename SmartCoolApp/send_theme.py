@@ -53,6 +53,14 @@ elif target in ("xr2", "fiesta", "ford", "hot_hatch"):
     image_path = os.path.join(assets_dir, "preview_theme_xr2_usb.png")
     if not os.path.exists(image_path):
         image_path = os.path.join(assets_dir, "preview_theme_xr2.png")
+elif target in ("cs2", "counterstrike", "counter-strike"):
+    image_path = os.path.join(assets_dir, "preview_theme_cs2_usb.png")
+    if not os.path.exists(image_path):
+        image_path = os.path.join(assets_dir, "preview_theme_cs2.png")
+elif target in ("pubg", "battlegrounds", "erangel"):
+    image_path = os.path.join(assets_dir, "preview_theme_pubg_usb.png")
+    if not os.path.exists(image_path):
+        image_path = os.path.join(assets_dir, "preview_theme_pubg.png")
 else:
     image_path = target
 
