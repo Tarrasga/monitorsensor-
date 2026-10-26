@@ -114,6 +114,13 @@ class SmartCoolApp:
                 "primary": "#ef4444",
                 "dim": "#2a0808",
                 "accent": "#10b981"
+            },
+            "Ford Fiesta XR2 Mk2 (Classic Hot Hatch)": {
+                "file": os.path.join(self.assets_dir, "preview_theme_xr2.png"),
+                "layout": "XR2_MK2",
+                "primary": "#e11d48",
+                "dim": "#1c0a10",
+                "accent": "#0284c7"
             }
         }
 
@@ -1350,6 +1357,166 @@ class SmartCoolApp:
 
         return img
 
+    def render_xr2_view(self, stats, width=1280, height=720):
+        """Renderiza o tema 'Ford Fiesta XR2 Mk2' (Fotografia Realista & Telemetria 80s Hot Hatch)."""
+        scale = height / 320.0
+        is_compact = (width <= 640)
+
+        # 1. Carregar fotografia do Ford Fiesta XR2 Mk2
+        photo_path = os.path.join(self.assets_dir, 'fiesta_xr2_mk2.jpg')
+        if not os.path.exists(photo_path):
+            photo_path = os.path.join(self.assets_dir, 'fiesta_xr2_480x320.jpg')
+
+        if os.path.exists(photo_path):
+            base_img = Image.open(photo_path).convert('RGB')
+            base_ratio = base_img.width / float(base_img.height)
+            target_ratio = width / float(height)
+
+            if base_ratio > target_ratio:
+                nh = height
+                nw = int(height * base_ratio)
+                base_resized = base_img.resize((nw, nh), Image.Resampling.LANCZOS)
+                x_off = (nw - width) // 2
+                img = base_resized.crop((x_off, 0, x_off + width, height))
+            else:
+                nw = width
+                nh = int(width / base_ratio)
+                base_resized = base_img.resize((nw, nh), Image.Resampling.LANCZOS)
+                y_off = (nh - height) // 2
+                img = base_resized.crop((0, y_off, width, y_off + height))
+        else:
+            img = Image.new('RGB', (width, height), '#070a0e')
+
+        # 2. Camada de transparência para os cartões de telemetria
+        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        d_ov = ImageDraw.Draw(overlay)
+
+        bar_h = int(26 * scale)
+        d_ov.rectangle([0, 0, width, bar_h], fill=(7, 10, 16, 230))
+
+        side_w = int(width * (0.32 if not is_compact else 0.38))
+        my0 = bar_h + int(8 * scale)
+        my1 = height - int(60 * scale)
+        d_ov.rectangle([int(8*scale), my0, side_w, my1], fill=(8, 12, 18, 210), outline=(225, 29, 72, 180), width=max(1, int(1.5*scale)))
+
+        rx0 = width - side_w
+        rx1 = width - int(8 * scale)
+        d_ov.rectangle([rx0, my0, rx1, my1], fill=(8, 12, 18, 210), outline=(225, 29, 72, 180), width=max(1, int(1.5*scale)))
+
+        bot_y0 = my1 + int(6 * scale)
+        bot_y1 = height - int(4 * scale)
+        d_ov.rectangle([int(8*scale), bot_y0, width - int(8*scale), bot_y1], fill=(7, 10, 16, 235), outline=(30, 41, 59, 200), width=1)
+
+        img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+        draw = ImageDraw.Draw(img)
+
+        f_title = self._get_font("ui", 11, scale, bold=True)
+        f_clock = self._get_font("mono", 11, scale, bold=True)
+        f_num_big = self._get_font("mono", 25, scale, bold=True)
+        f_num_med = self._get_font("ui", 12, scale, bold=True)
+        f_label = self._get_font("ui", 9.5, scale, bold=True)
+        f_val = self._get_font("ui", 9.5, scale, bold=True)
+        f_small = self._get_font("ui", 8.5, scale, bold=False)
+        f_xr_badge = self._get_font("ui", 16, scale, bold=True)
+
+        c_red_ford = "#e11d48"
+        c_blue_ford = "#0284c7"
+        c_white = "#f8fafc"
+        c_slate = "#94a3b8"
+        c_green = "#10b981"
+        c_amber = "#f59e0b"
+
+        # Barra Superior Motorsport
+        stripe_h = max(2, int(3 * scale))
+        draw.rectangle([0, 0, width, stripe_h], fill=c_red_ford)
+        draw.rectangle([0, stripe_h, int(width * 0.45), stripe_h * 2], fill=c_blue_ford)
+
+        draw.text((int(14 * scale), int(6 * scale)), "FORD FIESTA XR2 // 1.6L CVH HOT HATCH", fill=c_white, font=f_title)
+        draw.text((width - int(120 * scale), int(6 * scale)), stats.get("time", "00:00"), fill=c_red_ford, font=f_clock)
+
+        # Painel Esquerdo: Motor 1.6 CVH (CPU)
+        px0 = int(8 * scale)
+        px1 = side_w
+        head_h = int(22 * scale)
+        draw.rectangle([px0, my0, px1, my0 + head_h], fill="#131b26")
+        draw.rectangle([px0, my0, px0 + int(4*scale), my0 + head_h], fill=c_red_ford)
+        draw.text((px0 + int(10*scale), my0 + int(3*scale)), "ENGINE // 1.6 CVH (CPU)", fill=c_white, font=f_label)
+
+        c_cpu_t = c_red_ford if stats.get("cpu_temp", 50) >= 75 else (c_amber if stats.get("cpu_temp", 50) >= 55 else c_green)
+        draw.text((px0 + int(14*scale), my0 + int(32*scale)), f"{stats.get('cpu_temp', 50)}°C", fill=c_cpu_t, font=f_num_big)
+        draw.text((px1 - int(14*scale), my0 + int(32*scale)), f"{stats.get('cpu_usage', 30)}% LOAD", fill=c_white, font=f_num_med, anchor="ra")
+
+        bar_x = px0 + int(14*scale)
+        bar_w = (px1 - px0) - int(28*scale)
+        bar_y = my0 + int(68*scale)
+        draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + int(10*scale)], fill="#1e293b")
+        u_pct = min(1.0, stats.get("cpu_usage", 30) / 100.0)
+        draw.rectangle([bar_x, bar_y, bar_x + int(bar_w * u_pct), bar_y + int(10*scale)], fill=c_red_ford if u_pct >= 0.75 else c_green)
+
+        dy = bar_y + int(18*scale)
+        lines_cpu = [
+            ("CAMSHAFT / CLOCK", f"{stats.get('cpu_clock', 4.5)} GHz", c_blue_ford),
+            ("RADIATOR FAN", f"{stats.get('cpu_fan', 1200)} RPM", c_white),
+            ("CYLINDERS / THR", f"{stats.get('cpu_cores', '14C/20T')}", c_white),
+            ("WATER TEMPERATURE", f"{stats.get('sys_temp', 32)}°C (NORMAL)", c_green),
+            ("SESSION RUNNING", f"{stats.get('uptime', '0h')}", c_slate)
+        ]
+        for lbl, val, col in lines_cpu:
+            draw.text((bar_x, dy), lbl, fill=c_slate, font=f_small)
+            draw.text((px1 - int(14*scale), dy), val, fill=col, font=f_val, anchor="ra")
+            dy += int(17 * scale)
+
+        # Painel Direito: Transmissão & GPU
+        draw.rectangle([rx0, my0, rx1, my0 + head_h], fill="#131b26")
+        draw.rectangle([rx1 - int(4*scale), my0, rx1, my0 + head_h], fill=c_red_ford)
+        draw.text((rx0 + int(10*scale), my0 + int(3*scale)), f"POWERTRAIN // {stats.get('gpu_name', 'RTX')}", fill=c_white, font=f_label)
+
+        c_gpu_t = c_red_ford if stats.get("gpu_temp", 50) >= 75 else (c_amber if stats.get("gpu_temp", 50) >= 55 else c_blue_ford)
+        draw.text((rx0 + int(14*scale), my0 + int(32*scale)), f"{stats.get('gpu_temp', 50)}°C", fill=c_gpu_t, font=f_num_big)
+        draw.text((rx1 - int(14*scale), my0 + int(32*scale)), f"{stats.get('gpu_usage', 40)}% LOAD", fill=c_white, font=f_num_med, anchor="ra")
+
+        rbar_x = rx0 + int(14*scale)
+        draw.rectangle([rbar_x, bar_y, rbar_x + bar_w, bar_y + int(10*scale)], fill="#1e293b")
+        gu_pct = min(1.0, stats.get("gpu_usage", 40) / 100.0)
+        draw.rectangle([rbar_x, bar_y, rbar_x + int(bar_w * gu_pct), bar_y + int(10*scale)], fill=c_blue_ford)
+
+        rdy = bar_y + int(18*scale)
+        lines_gpu = [
+            ("ENGINE HOTSPOT", f"{stats.get('gpu_hotspot', 55)}°C", c_amber),
+            ("5-SPEED GEARBOX", f"{stats.get('gpu_clock', 2600)} MHz", c_white),
+            ("VRAM BUFFER", f"{stats.get('gpu_vram_used', 6.0)}/{stats.get('gpu_vram_total', 12.0)} GB", c_blue_ford),
+            ("FUEL INJECTION", f"{stats.get('gpu_power', 120)} WATTS", c_green),
+            ("INTERCOOLER FAN", f"{stats.get('gpu_fan', 1300)} RPM", c_white)
+        ]
+        for lbl, val, col in lines_gpu:
+            draw.text((rbar_x, rdy), lbl, fill=c_slate, font=f_small)
+            draw.text((rx1 - int(14*scale), rdy), val, fill=col, font=f_val, anchor="ra")
+            rdy += int(17 * scale)
+
+        # Rodapé Inferior: Chassis & Armazenamento
+        col_w = (width - int(16*scale) - int(90*scale)) // 3
+        bx = int(14 * scale)
+
+        draw.text((bx, bot_y0 + int(8*scale)), "PETROL (RAM DDR5)", fill=c_slate, font=f_small)
+        draw.text((bx, bot_y0 + int(24*scale)), f"{stats.get('ram_used_gb', 14)} / {stats.get('ram_total_gb', 32)} GB ({stats.get('ram_usage', 44)}%)", fill=c_green, font=f_val)
+
+        bx += col_w
+        draw.text((bx, bot_y0 + int(8*scale)), "FRONT AXLE (NVMe C:)", fill=c_slate, font=f_small)
+        draw.text((bx, bot_y0 + int(24*scale)), f"{stats.get('disk_c_used', 700)} / {stats.get('disk_c_total', 930)} GB ({stats.get('disk_c_pct', 80)}%)", fill=c_white, font=f_val)
+
+        bx += col_w
+        draw.text((bx, bot_y0 + int(8*scale)), "REAR AXLE (NVMe E:)", fill=c_slate, font=f_small)
+        draw.text((bx, bot_y0 + int(24*scale)), f"{stats.get('disk_e_pct', 80)}% | NET: ↓{stats.get('net_down_str', '0KB')} ↑{stats.get('net_up_str', '0KB')}", fill=c_blue_ford, font=f_val)
+
+        badge_x = width - int(95 * scale)
+        badge_y = bot_y0 + int(6 * scale)
+        badge_w = int(80 * scale)
+        badge_h = int(38 * scale)
+        draw.rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], fill="#180408", outline=c_red_ford, width=2)
+        draw.text((badge_x + badge_w // 2, badge_y + badge_h // 2 - int(2*scale)), "XR2", fill=c_red_ford, font=f_xr_badge, anchor="mm")
+
+        return img
+
     def render_frame(self, stats, width=480, height=320):
         """Renderiza o frame solicitado na resolução desejada."""
         theme_info = self.themes.get(self.current_theme_name, self.themes["Master Telemetry (Todos os Sensores)"])
@@ -1363,6 +1530,8 @@ class SmartCoolApp:
             return self.render_airplane_cockpit_view(stats, width, height)
         elif layout == "GT_COCKPIT":
             return self.render_gt_cockpit_view(stats, width, height)
+        elif layout == "XR2_MK2":
+            return self.render_xr2_view(stats, width, height)
 
         # Temas Legados (480x320)
         if os.path.exists(self.bg_path):
@@ -1441,7 +1610,7 @@ class SmartCoolApp:
         theme_info = self.themes.get(self.current_theme_name, {})
         layout = theme_info.get("layout", "ALL_SENSORS")
 
-        if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT"):
+        if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2"):
             display_frame = self.render_frame(stats, width=cw, height=ch)
             self.preview_image = ImageTk.PhotoImage(display_frame)
             self.canvas.delete("all")
@@ -1460,7 +1629,7 @@ class SmartCoolApp:
 
         # Se a transmissão contínua estiver parada, envia o frame estático inicial para o servidor Wi-Fi
         if not self.running and self.wifi_enabled_var.get() and self.web_server.is_running:
-            wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT") else display_frame
+            wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2") else display_frame
             self.web_server.update_frame(wifi_frame, stats)
 
     def update_preview(self):
@@ -1495,7 +1664,7 @@ class SmartCoolApp:
                     try:
                         theme_info = self.themes.get(self.current_theme_name, {})
                         layout = theme_info.get("layout", "ALL_SENSORS")
-                        wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT") else usb_frame
+                        wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2") else usb_frame
                         self.web_server.update_frame(wifi_frame, stats)
                     except Exception as we:
                         print(f"[App] Erro na frame Wi-Fi 720p: {we}")

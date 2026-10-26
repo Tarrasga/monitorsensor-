@@ -49,6 +49,10 @@ elif target in ("airplane", "aviao", "hud", "cockpit_aviao"):
     image_path = os.path.join(assets_dir, "preview_theme_airplane.png")
 elif target in ("gt", "cockpit_gt", "racing", "carro"):
     image_path = os.path.join(assets_dir, "preview_theme_gt.png")
+elif target in ("xr2", "fiesta", "ford", "hot_hatch"):
+    image_path = os.path.join(assets_dir, "preview_theme_xr2_usb.png")
+    if not os.path.exists(image_path):
+        image_path = os.path.join(assets_dir, "preview_theme_xr2.png")
 else:
     image_path = target
 
