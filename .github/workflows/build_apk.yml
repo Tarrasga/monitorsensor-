@@ -37,20 +37,13 @@ jobs:
       - name: Compilar APK Debug
         working-directory: AndroidApp
         run: |
-          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle_output.log
-
-      - name: Registar Resumo de Compilação
-        if: always()
-        run: |
-          echo "### 📋 Log de Compilação Gradle" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -n 80 /tmp/gradle_output.log >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          gradle :app:assembleDebug --no-daemon --stacktrace
+          find . -name "*.apk"
 
       - name: Renomear APK
         run: |
           mkdir -p output
-          find . -name "*.apk" -not -path "./output/*" -exec cp -v {} output/SmartCool-Master-Telemetry.apk \;
+          find AndroidApp/app/build/outputs/apk -name "*.apk" -exec cp -v {} output/SmartCool-Master-Telemetry.apk \;
           ls -lh output/
 
       - name: Guardar Artefacto APK
@@ -58,6 +51,7 @@ jobs:
         with:
           name: SmartCool-Master-Telemetry-APK
           path: output/SmartCool-Master-Telemetry.apk
+          if-no-files-found: error
 
       - name: Publicar Release no GitHub
         uses: softprops/action-gh-release@v2
