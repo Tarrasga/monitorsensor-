@@ -43,6 +43,12 @@ elif target in ("rog", "tarrasga"):
     image_path = os.path.join(base_dir, "tarrasga_rog_preview.png")
     if not os.path.exists(image_path):
         image_path = os.path.join(assets_dir, "background.png")
+elif target in ("speedometer", "velocimetros", "dials"):
+    image_path = os.path.join(assets_dir, "preview_theme_speedometer.png")
+elif target in ("airplane", "aviao", "hud", "cockpit_aviao"):
+    image_path = os.path.join(assets_dir, "preview_theme_airplane.png")
+elif target in ("gt", "cockpit_gt", "racing", "carro"):
+    image_path = os.path.join(assets_dir, "preview_theme_gt.png")
 else:
     image_path = target
 
