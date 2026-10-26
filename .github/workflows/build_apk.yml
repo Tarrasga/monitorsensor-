@@ -37,7 +37,14 @@ jobs:
       - name: Compilar APK Debug
         working-directory: AndroidApp
         run: |
-          gradle assembleDebug --no-daemon
+          gradle assembleDebug --no-daemon --stacktrace > ../gradle_error.txt 2>&1 || (cat ../gradle_error.txt | tail -n 60 && exit 1)
+
+      - name: Guardar Log de Erro se Falhar
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-error-log
+          path: gradle_error.txt
 
       - name: Guardar e Publicar APK
         run: |
