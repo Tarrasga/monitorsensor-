@@ -44,6 +44,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           cp ../gradle_error.txt ./gradle_error.log
           git add gradle_error.log
           git commit -m "chore: gradle error log [skip ci]" || true
