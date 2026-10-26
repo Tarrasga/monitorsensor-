@@ -7,9 +7,8 @@ echo    SMARTCOOL 3.5 MONITOR // TARRASGA EDITION
 echo ======================================================
 echo.
 
-:: Fechar qualquer instancia anterior em segundo plano para libertar a porta USB e a porta Wi-Fi 8080
-taskkill /F /FI "WINDOWTITLE eq SmartCool*" >nul 2>&1
-powershell -NoProfile -Command "Get-Process -Name python,py -ErrorAction SilentlyContinue | Stop-Process -Force" >nul 2>&1
+:: Fechar qualquer instancia anterior em segundo plano de app.py
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"CommandLine like '%%app.py%%'\" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >nul 2>&1
 
 :: 1. Testar python
 python --version >nul 2>&1
@@ -26,6 +25,11 @@ echo [1/2] A verificar dependencias...
 python -m pip install -r requirements.txt --quiet --no-warn-script-location
 echo [2/2] A iniciar o SmartCool Monitor...
 python app.py
+if errorlevel 1 (
+    echo.
+    echo [ERRO] A aplicacao encerrou com erro.
+    pause
+)
 goto END
 
 :RUN_PY
@@ -33,6 +37,11 @@ echo [1/2] A verificar dependencias...
 py -m pip install -r requirements.txt --quiet --no-warn-script-location
 echo [2/2] A iniciar o SmartCool Monitor...
 py app.py
+if errorlevel 1 (
+    echo.
+    echo [ERRO] A aplicacao encerrou com erro.
+    pause
+)
 goto END
 
 :NO_PYTHON
