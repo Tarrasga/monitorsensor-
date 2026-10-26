@@ -7,8 +7,9 @@ echo    SMARTCOOL 3.5 MONITOR // TARRASGA EDITION
 echo ======================================================
 echo.
 
-:: Fechar qualquer instancia anterior em segundo plano para libertar a porta USB
-powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"CommandLine like '%%app.py%%'\" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >nul 2>&1
+:: Fechar qualquer instancia anterior em segundo plano para libertar a porta USB e a porta Wi-Fi 8080
+taskkill /F /FI "WINDOWTITLE eq SmartCool*" >nul 2>&1
+powershell -NoProfile -Command "Get-Process -Name python,py -ErrorAction SilentlyContinue | Stop-Process -Force" >nul 2>&1
 
 :: 1. Testar python
 python --version >nul 2>&1

@@ -67,17 +67,43 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
             width: 100vw;
             height: 100vh;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             background: #07090e;
         }
         #dashboard-stream {
-            max-width: 100%;
-            max-height: 100%;
+            max-width: 100vw;
+            max-height: 100vh;
             width: 100%;
-            height: 100%;
+            height: auto;
             object-fit: contain;
             display: block;
+        }
+        #rotate-tip {
+            display: none;
+            position: absolute;
+            bottom: 64px;
+            background: rgba(18, 23, 34, 0.9);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 98;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.04); opacity: 1; }
+        }
+        @media (orientation: portrait) {
+            #rotate-tip {
+                display: block;
+            }
         }
         #fullscreen-btn {
             position: absolute;
@@ -129,6 +155,7 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
     <div id="stream-container">
         <div id="status-pill">● TELEMETRIA AO VIVO</div>
         <img id="dashboard-stream" src="/frame.jpg" alt="SmartCool Telemetry Dashboard">
+        <div id="rotate-tip">🔄 Vira o telemóvel na horizontal (deitado) para ver em grande</div>
         <button id="fullscreen-btn" onclick="toggleFullscreen()">⛶ TELA CHEIA</button>
     </div>
 
@@ -276,16 +303,23 @@ class TelemetryRequestHandler(BaseHTTPRequestHandler):
 
         try:
             if self.path == '/' or self.path.startswith('/index'):
+                html_bytes = HTML_PAGE_TEMPLATE.encode('utf-8')
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', str(len(html_bytes)))
                 self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                self.send_header('Pragma', 'no-cache')
+                self.send_header('Expires', '0')
+                self.send_header('Connection', 'close')
                 self.end_headers()
-                self.wfile.write(HTML_PAGE_TEMPLATE.encode('utf-8'))
+                self.wfile.write(html_bytes)
 
             elif self.path == '/manifest.json':
                 data = json.dumps(PWA_MANIFEST).encode('utf-8')
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/manifest+json')
+                self.send_header('Content-Length', str(len(data)))
+                self.send_header('Connection', 'close')
                 self.end_headers()
                 self.wfile.write(data)
 
@@ -296,17 +330,22 @@ class TelemetryRequestHandler(BaseHTTPRequestHandler):
                         icon_bytes = f.read()
                     self.send_response(200)
                     self.send_header('Content-Type', 'image/png')
+                    self.send_header('Content-Length', str(len(icon_bytes)))
                     self.send_header('Cache-Control', 'public, max-age=86400')
+                    self.send_header('Connection', 'close')
                     self.end_headers()
                     self.wfile.write(icon_bytes)
                 else:
                     self.send_response(404)
+                    self.send_header('Content-Length', '0')
+                    self.send_header('Connection', 'close')
                     self.end_headers()
 
             elif self.path.startswith('/stream'):
                 self.send_response(200)
                 self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=frame')
                 self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
 
                 last_version = -1
@@ -318,7 +357,8 @@ class TelemetryRequestHandler(BaseHTTPRequestHandler):
                     if curr_version != last_version and jpeg_bytes:
                         last_version = curr_version
                         self.wfile.write(b'--frame\r\n')
-                        self.wfile.write(b'Content-Type: image/jpeg\r\n\r\n')
+                        self.wfile.write(b'Content-Type: image/jpeg\r\n')
+                        self.wfile.write(f'Content-Length: {len(jpeg_bytes)}\r\n\r\n'.encode('ascii'))
                         self.wfile.write(jpeg_bytes)
                         self.wfile.write(b'\r\n')
                         self.wfile.flush()
@@ -332,12 +372,18 @@ class TelemetryRequestHandler(BaseHTTPRequestHandler):
                 if jpeg_bytes:
                     self.send_response(200)
                     self.send_header('Content-Type', 'image/jpeg')
+                    self.send_header('Content-Length', str(len(jpeg_bytes)))
                     self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                    self.send_header('Pragma', 'no-cache')
+                    self.send_header('Expires', '0')
                     self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Connection', 'close')
                     self.end_headers()
                     self.wfile.write(jpeg_bytes)
                 else:
                     self.send_response(404)
+                    self.send_header('Content-Length', '0')
+                    self.send_header('Connection', 'close')
                     self.end_headers()
 
             elif self.path.startswith('/api/stats'):
