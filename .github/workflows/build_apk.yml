@@ -22,19 +22,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v3
-
-      - name: Gerar Gradle Wrapper
-        working-directory: AndroidApp
-        run: gradle wrapper --gradle-version 8.4
+        with:
+          gradle-version: '8.4'
 
       - name: Compilar APK Debug
         working-directory: AndroidApp
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Renomear APK
         working-directory: AndroidApp
@@ -50,20 +46,22 @@ jobs:
 
       - name: Publicar Release no GitHub
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v1.0.0
+          tag_name: "v1.0.0"
           name: "SmartCool Master Telemetry Android App v1.0.0"
           body: |
-            ### 📱 Aplicação Android Pronta para Instalar
-            - Mantém o ecrã do telemóvel/tablet sempre ligado (**FLAG_KEEP_SCREEN_ON**).
-            - Ecrã total imersivo sem barras de sistema.
-            - Telemetria de hardware (CPU, GPU, RAM, VRAM, NVMe) ao vivo em tempo real.
-            - Transmissão direta por Wi-Fi de alta definição.
+            ### 📱 Aplicação Android Oficial // Ecrã Sempre Ligado
+            - **Ecrã NUNCA Desliga**: Configurado nativamente com `FLAG_KEEP_SCREEN_ON`.
+            - **Modo Imersivo**: Ocupa o ecrã inteiro sem barras de notificações ou navegação.
+            - **Zero Lag / Zero Congelamento**: Conexão Wi-Fi contínua direta ao PC.
 
-            #### Como instalar:
-            1. Descarrega o ficheiro `SmartCool-Master-Telemetry.apk` abaixo no teu telemóvel.
-            2. Toca no ficheiro descarregado para instalar (autoriza "Instalar fontes desconhecidas" se o Android pedir).
-            3. Abre a app e desfruta da monitorização contínua!
+            #### 📥 Como Instalar no Telemóvel:
+            1. No teu telemóvel, abre esta página do GitHub e clica no ficheiro **`SmartCool-Master-Telemetry.apk`** abaixo.
+            2. Quando o download terminar, toca no ficheiro para instalar.
+            3. Se o Android pedir autorização, ativa "Permitir desta fonte" / "Instalar aplicações desconhecidas".
+            4. Abre a aplicação **SmartCool** e o ecrã ficará sempre ligado a mostrar a telemetria do PC!
           files: AndroidApp/output/SmartCool-Master-Telemetry.apk
+          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
