@@ -37,14 +37,21 @@ jobs:
       - name: Compilar APK Debug
         working-directory: AndroidApp
         run: |
-          gradle :app:assembleDebug --no-daemon --stacktrace
-          find . -name "*.apk"
+          gradle assembleDebug --no-daemon
 
-      - name: Renomear APK
+      - name: Guardar e Publicar APK
         run: |
           mkdir -p output
-          find AndroidApp/app/build/outputs/apk -name "*.apk" -exec cp -v {} output/SmartCool-Master-Telemetry.apk \;
-          ls -lh output/
+          APK_FILE=$(find $GITHUB_WORKSPACE -name "*.apk" | head -n 1)
+          if [ -n "$APK_FILE" ]; then
+            echo "Encontrado APK em: $APK_FILE"
+            cp -v "$APK_FILE" output/SmartCool-Master-Telemetry.apk
+            ls -lh output/
+          else
+            echo "ERRO: Nenhum APK encontrado no workspace!"
+            find $GITHUB_WORKSPACE -maxdepth 5 || true
+            exit 1
+          fi
 
       - name: Guardar Artefacto APK
         uses: actions/upload-artifact@v4
