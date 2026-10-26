@@ -1053,8 +1053,12 @@ class SmartCoolApp:
                         layout = theme_info.get("layout", "ALL_SENSORS")
                         wifi_frame = self.render_frame(stats, width=1280, height=720) if layout == "ALL_SENSORS" else usb_frame
                         self.web_server.update_frame(wifi_frame, stats)
-                    except Exception:
-                        pass
+                    except Exception as we:
+                        print(f"[App] Erro na frame Wi-Fi 720p: {we}")
+                        try:
+                            self.web_server.update_frame(usb_frame, stats)
+                        except Exception:
+                            pass
 
                 # 6. Atualizar GUI no PC (Canvas)
                 self.root.after(0, self._update_canvas_display, stats)

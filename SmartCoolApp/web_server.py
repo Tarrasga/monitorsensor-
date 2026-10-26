@@ -15,7 +15,7 @@ import socket
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
-from PIL import Image
+from PIL import Image, ImageDraw
 import qrcode
 
 
@@ -127,7 +127,7 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
     </video>
 
     <div id="stream-container">
-        <div id="status-pill">● ECRÃ FIXO ON</div>
+        <div id="status-pill">● TELEMETRIA AO VIVO</div>
         <img id="dashboard-stream" src="/frame.jpg" alt="SmartCool Telemetry Dashboard">
         <button id="fullscreen-btn" onclick="toggleFullscreen()">⛶ TELA CHEIA</button>
     </div>
@@ -137,10 +137,7 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
         const video = document.getElementById('nosleep-video');
         function activateKeepScreenOn() {
             if (video && video.paused) {
-                video.play().then(() => {
-                    const pill = document.getElementById('status-pill');
-                    if (pill) pill.innerText = '● ECRÃ FIXO ON';
-                }).catch(() => {});
+                video.play().catch(() => {});
             }
             if ('wakeLock' in navigator) {
                 try {
@@ -157,8 +154,7 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
                 activateKeepScreenOn();
             }
         });
-        // Reativação de segurança a cada 20 segundos
-        setInterval(activateKeepScreenOn, 20000);
+        setInterval(activateKeepScreenOn, 15000);
 
         // 2. Alternar Tela Cheia Imersiva
         function toggleFullscreen() {
@@ -199,42 +195,31 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
         document.addEventListener('click', resetFade);
         resetFade();
 
-        // 3. Motor de Streaming Resiliente (Zero paragens, Reconexão Instantânea 24/7)
+        // 3. Motor de Atualização Contínua Ultra-Resiliente (Zero Dependências, Zero Bloqueios)
         const streamImg = document.getElementById('dashboard-stream');
-        let isFetching = false;
+        let updateTimer = null;
 
-        async function fetchNextFrame() {
-            if (isFetching) return;
-            isFetching = true;
-            try {
-                const res = await fetch('/frame.jpg?t=' + Date.now(), { cache: 'no-store' });
-                if (res.ok) {
-                    const blob = await res.blob();
-                    const newUrl = URL.createObjectURL(blob);
-                    const temp = new Image();
-                    temp.onload = () => {
-                        const oldUrl = streamImg.src;
-                        streamImg.src = newUrl;
-                        if (oldUrl && oldUrl.startsWith('blob:')) {
-                            URL.revokeObjectURL(oldUrl);
-                        }
-                        isFetching = false;
-                    };
-                    temp.onerror = () => {
-                        isFetching = false;
-                    };
-                    temp.src = newUrl;
-                } else {
-                    isFetching = false;
-                }
-            } catch (err) {
-                isFetching = false;
-            }
+        function refreshDashboard() {
+            const nextImg = new Image();
+            nextImg.onload = function() {
+                streamImg.src = nextImg.src;
+                pill.innerText = '● TELEMETRIA AO VIVO';
+                pill.style.color = '#10b981';
+                pill.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                clearTimeout(updateTimer);
+                updateTimer = setTimeout(refreshDashboard, 800);
+            };
+            nextImg.onerror = function() {
+                pill.innerText = '○ A RECONECTAR...';
+                pill.style.color = '#f59e0b';
+                pill.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+                clearTimeout(updateTimer);
+                updateTimer = setTimeout(refreshDashboard, 1200);
+            };
+            nextImg.src = '/frame.jpg?t=' + Date.now();
         }
 
-        // Atualizar frame continuamente a cada 800ms
-        setInterval(fetchNextFrame, 800);
-        fetchNextFrame();
+        refreshDashboard();
     </script>
 </body>
 </html>
@@ -347,7 +332,8 @@ class TelemetryRequestHandler(BaseHTTPRequestHandler):
                 if jpeg_bytes:
                     self.send_response(200)
                     self.send_header('Content-Type', 'image/jpeg')
-                    self.send_header('Cache-Control', 'no-cache, no-store')
+                    self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                    self.send_header('Access-Control-Allow-Origin', '*')
                     self.end_headers()
                     self.wfile.write(jpeg_bytes)
                 else:
@@ -399,6 +385,20 @@ class TelemetryWebServer:
         self.latest_stats = None
         self.frame_version = 0
         self.lock = threading.Lock()
+
+        # Frame inicial de arranque (garante que /frame.jpg NUNCA retorne 404)
+        try:
+            init_img = Image.new("RGB", (1280, 720), "#07090e")
+            draw = ImageDraw.Draw(init_img)
+            draw.rectangle([40, 40, 1240, 680], outline="#1e293b", width=2)
+            draw.text((640, 320), "SMARTCOOL MASTER TELEMETRY", fill="#10b981", anchor="mm")
+            draw.text((640, 370), "A ligar a telemetria do PC em tempo real...", fill="#94a3b8", anchor="mm")
+            buf = io.BytesIO()
+            init_img.save(buf, format="JPEG", quality=85)
+            self.latest_jpeg = buf.getvalue()
+            self.frame_version = 1
+        except Exception:
+            pass
 
         self.url = f"http://{self.host_ip}:{self.port}"
         self.qr_png_bytes = self._generate_qr_code(self.url)
@@ -466,6 +466,9 @@ class TelemetryWebServer:
             return
 
         try:
+            if pil_image.mode in ("RGBA", "P", "LA"):
+                pil_image = pil_image.convert("RGB")
+
             buf = io.BytesIO()
             pil_image.save(buf, format="JPEG", quality=85, optimize=True)
             jpeg_bytes = buf.getvalue()
@@ -482,7 +485,7 @@ class TelemetryWebServer:
                     self.server.frame_version = self.frame_version
 
         except Exception as e:
-            pass
+            print(f"[WebServer] Erro ao codificar JPEG: {e}")
 
 
 if __name__ == "__main__":
