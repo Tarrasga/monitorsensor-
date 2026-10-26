@@ -37,7 +37,15 @@ jobs:
       - name: Compilar APK Debug
         working-directory: AndroidApp
         run: |
-          gradle assembleDebug --no-daemon --stacktrace
+          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle_output.log
+
+      - name: Registar Resumo de Compilação
+        if: always()
+        run: |
+          echo "### 📋 Log de Compilação Gradle" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 80 /tmp/gradle_output.log >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Renomear APK
         working-directory: AndroidApp
