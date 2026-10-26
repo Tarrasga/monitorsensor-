@@ -50,7 +50,7 @@ jobs:
       - name: Renomear APK
         run: |
           mkdir -p output
-          cp AndroidApp/app/build/outputs/apk/debug/app-debug.apk output/SmartCool-Master-Telemetry.apk
+          find . -name "*.apk" -not -path "./output/*" -exec cp -v {} output/SmartCool-Master-Telemetry.apk \;
           ls -lh output/
 
       - name: Guardar Artefacto APK

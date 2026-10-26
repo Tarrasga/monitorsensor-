@@ -59,6 +59,11 @@ public class MainActivity extends Activity {
             btnRetry.setOnClickListener(v -> loadDashboard());
         }
 
+        View btnChangeIp = findViewById(R.id.btnChangeIp);
+        if (btnChangeIp != null) {
+            btnChangeIp.setOnClickListener(v -> showSettingsDialog());
+        }
+
         setupWebView();
         loadDashboard();
     }
@@ -99,6 +104,11 @@ public class MainActivity extends Activity {
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setSupportZoom(false);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        }
 
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
