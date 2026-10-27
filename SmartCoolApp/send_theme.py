@@ -71,6 +71,10 @@ elif target in ("mixer", "dj", "mesa", "equalizer", "eq", "musica", "audio", "st
     image_path = os.path.join(assets_dir, "preview_theme_mixer_usb.png")
     if not os.path.exists(image_path):
         image_path = os.path.join(assets_dir, "preview_theme_mixer.png")
+elif target in ("transparente", "transparent", "glass", "overlay", "glass_hud", "hud_transparente"):
+    image_path = os.path.join(assets_dir, "preview_theme_transparent_usb.png")
+    if not os.path.exists(image_path):
+        image_path = os.path.join(assets_dir, "preview_theme_transparent.png")
 else:
     image_path = target
 

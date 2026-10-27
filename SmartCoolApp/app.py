@@ -167,6 +167,13 @@ class SmartCoolApp:
                 "primary": "#10b981",
                 "dim": "#081812",
                 "accent": "#00d2ff"
+            },
+            "HUD Overlay Transparente (Glass HUD)": {
+                "file": os.path.join(self.assets_dir, "preview_theme_transparent.png"),
+                "layout": "TRANSPARENT_HUD",
+                "primary": "#00e5ff",
+                "dim": "#061522",
+                "accent": "#10b981"
             }
         }
 
@@ -192,6 +199,13 @@ class SmartCoolApp:
         self.is_fullscreen = False
         self.saved_geometry = None
         self.last_stats = None
+
+        # Controlo de Transparência e Overlay para o 2º Ecrã
+        self.CHROMA_KEY_COLOR = "#010203"
+        self.transparent_mode_var = tk.BooleanVar(value=False)
+        self.opacity_scale_var = tk.DoubleVar(value=1.0)
+        self._drag_start_x = 0
+        self._drag_start_y = 0
 
         # Manter Janela Sempre no Topo (Always on Top)
         self.always_on_top_var = tk.BooleanVar(value=True)
@@ -225,11 +239,15 @@ class SmartCoolApp:
         self._build_ui()
         self._refresh_devices()
 
-        # Atalhos de Teclado para 2º Ecrã
+        # Atalhos de Teclado para 2º Ecrã e Transparência HUD
         self.root.bind("<F11>", self._toggle_fullscreen)
         self.root.bind("<Escape>", self._exit_fullscreen)
         self.canvas.bind("<F11>", self._toggle_fullscreen)
         self.canvas.bind("<Escape>", self._exit_fullscreen)
+        self.root.bind("<t>", self._toggle_transparency_mode)
+        self.root.bind("<T>", self._toggle_transparency_mode)
+        self.canvas.bind("<t>", self._toggle_transparency_mode)
+        self.canvas.bind("<T>", self._toggle_transparency_mode)
 
         # Renderizar primeiro frame
         self.update_preview()
@@ -256,11 +274,11 @@ class SmartCoolApp:
 
     def _build_ui(self):
         # 1. Cabeçalho Superior
-        header_frame = tk.Frame(self.root, bg="#0d111a", padx=16, pady=10)
-        header_frame.pack(fill=tk.X)
+        self.header_frame = tk.Frame(self.root, bg="#0d111a", padx=16, pady=10)
+        self.header_frame.pack(fill=tk.X)
 
         self.lbl_title = tk.Label(
-            header_frame,
+            self.header_frame,
             text="MASTER TELEMETRY // SMARTCOOL, 2º ECRÃ & WI-FI",
             font=("Segoe UI", 12, "bold"),
             fg="#e2e8f0",
@@ -269,7 +287,7 @@ class SmartCoolApp:
         self.lbl_title.pack(side=tk.LEFT)
 
         subtitle = tk.Label(
-            header_frame,
+            self.header_frame,
             text="27 Sensores // TARRASGA",
             font=("Segoe UI", 9),
             fg="#94a3b8",
@@ -279,7 +297,7 @@ class SmartCoolApp:
 
         # Botão de Tela Cheia para o 2º Ecrã
         self.btn_fullscreen = tk.Button(
-            header_frame,
+            self.header_frame,
             text="⛶ EXPANDIR NESTE ECRÃ (F11)",
             command=self._toggle_fullscreen,
             bg="#1e293b",
@@ -293,9 +311,25 @@ class SmartCoolApp:
         )
         self.btn_fullscreen.pack(side=tk.RIGHT)
 
+        # Botão Modo Overlay Transparente (2º Ecrã)
+        self.btn_transparency = tk.Button(
+            self.header_frame,
+            text="✨ OVERLAY (T)",
+            command=self._toggle_transparency_mode,
+            bg="#1e293b",
+            fg="#00e5ff",
+            activebackground="#2e3e56",
+            activeforeground="#00e5ff",
+            relief=tk.FLAT,
+            font=("Segoe UI", 9, "bold"),
+            padx=10,
+            pady=4
+        )
+        self.btn_transparency.pack(side=tk.RIGHT, padx=(0, 8))
+
         # Botão Fixar Sempre no Topo (Always on Top)
         self.btn_topmost = tk.Button(
-            header_frame,
+            self.header_frame,
             text="📌 SEMPRE NO TOPO",
             command=self._toggle_topmost_btn,
             bg="#1e293b",
@@ -311,7 +345,7 @@ class SmartCoolApp:
 
         # Botão QR Code para Telemóvel no Cabeçalho
         self.btn_qr_top = tk.Button(
-            header_frame,
+            self.header_frame,
             text="📱 TELEMÓVEL / TABLET (QR CODE)",
             command=self._show_qr_code_window,
             bg="#1e293b",
@@ -326,11 +360,11 @@ class SmartCoolApp:
         self.btn_qr_top.pack(side=tk.RIGHT, padx=(0, 8))
 
         # 2. Área Central (Responsiva)
-        content_frame = tk.Frame(self.root, bg="#0a0d14", padx=12, pady=10)
-        content_frame.pack(fill=tk.BOTH, expand=True)
+        self.content_frame = tk.Frame(self.root, bg="#0a0d14", padx=12, pady=10)
+        self.content_frame.pack(fill=tk.BOTH, expand=True)
 
         # Coluna Esquerda: Ecrã de Pré-visualização Expansível
-        self.preview_col = tk.Frame(content_frame, bg="#0a0d14")
+        self.preview_col = tk.Frame(self.content_frame, bg="#0a0d14")
         self.preview_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 12))
 
         prev_label = tk.Label(
@@ -351,8 +385,14 @@ class SmartCoolApp:
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.canvas.bind("<Configure>", self._on_canvas_resize)
 
+        # Suporte para arrastar a janela clicando no Canvas ou Cabeçalho
+        self.canvas.bind("<ButtonPress-1>", self._on_drag_start)
+        self.canvas.bind("<B1-Motion>", self._on_drag_motion)
+        self.header_frame.bind("<ButtonPress-1>", self._on_drag_start)
+        self.header_frame.bind("<B1-Motion>", self._on_drag_motion)
+
         # Coluna Direita: Barra Lateral de Controlos
-        self.controls_col = tk.Frame(content_frame, bg="#0d111a", padx=14, pady=14, width=285)
+        self.controls_col = tk.Frame(self.content_frame, bg="#0d111a", padx=14, pady=14, width=285)
         self.controls_col.pack(side=tk.RIGHT, fill=tk.Y)
         self.controls_col.pack_propagate(False)
 
@@ -392,7 +432,53 @@ class SmartCoolApp:
             activebackground="#0d111a",
             activeforeground="#10b981"
         )
-        self.chk_topmost.pack(anchor="w", pady=(0, 10))
+        self.chk_topmost.pack(anchor="w", pady=(0, 8))
+
+        # Grupo: Modo Transparente & Opacidade para o 2º Ecrã
+        trans_box = tk.LabelFrame(
+            self.controls_col,
+            text="TRANSPARÊNCIA (2º ECRÃ / OVERLAY)",
+            font=("Segoe UI", 8, "bold"),
+            fg="#00e5ff",
+            bg="#0d111a",
+            padx=8,
+            pady=8
+        )
+        trans_box.pack(fill=tk.X, pady=(0, 10))
+
+        self.chk_trans = tk.Checkbutton(
+            trans_box,
+            text="✨ Fundo Invisível (Chroma HUD)",
+            variable=self.transparent_mode_var,
+            command=self._on_transparency_changed,
+            font=("Segoe UI", 8, "bold"),
+            fg="#00e5ff",
+            bg="#0d111a",
+            selectcolor="#0a0d14",
+            activebackground="#0d111a",
+            activeforeground="#00e5ff"
+        )
+        self.chk_trans.pack(anchor="w", pady=(0, 4))
+
+        lbl_alpha = tk.Label(trans_box, text="Opacidade da Janela:", font=("Segoe UI", 8), fg="#94a3b8", bg="#0d111a")
+        lbl_alpha.pack(anchor="w", pady=(2, 2))
+
+        alpha_btns_row = tk.Frame(trans_box, bg="#0d111a")
+        alpha_btns_row.pack(fill=tk.X, pady=(2, 2))
+        for a_val, a_lbl in [(1.0, "100%"), (0.85, "85%"), (0.70, "70%"), (0.50, "50%")]:
+            b = tk.Button(
+                alpha_btns_row,
+                text=a_lbl,
+                command=lambda val=a_val: self._set_window_opacity(val),
+                bg="#1e293b",
+                fg="#cbd5e1",
+                activebackground="#334155",
+                activeforeground="#00e5ff",
+                relief=tk.FLAT,
+                font=("Segoe UI", 8, "bold"),
+                pady=2
+            )
+            b.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=1)
 
         # Grupo: Servidor Wi-Fi para Telemóvel / Tablet
         wifi_box = tk.LabelFrame(
@@ -676,8 +762,12 @@ class SmartCoolApp:
                 m_w = self.root.winfo_screenwidth()
                 m_h = self.root.winfo_screenheight()
 
-            # 3. Esconder a coluna de controlos para focar no painel
+            # 3. Esconder a coluna de controlos, cabeçalho e barra de estado para focar no painel / overlay
             self.controls_col.pack_forget()
+            self.header_frame.pack_forget()
+            self.status_bar.pack_forget()
+            self.content_frame.config(padx=0, pady=0)
+            self.preview_col.config(padx=0, pady=0)
             self.btn_fullscreen.config(text="🗗 RESTAURAR (ESC)")
 
             # 4. Expandir no monitor atual sem mudar para o monitor principal!
@@ -698,7 +788,11 @@ class SmartCoolApp:
             # Sair da tela cheia e voltar ao modo janela no mesmo monitor
             self.root.overrideredirect(False)
             self.btn_fullscreen.config(text="⛶ EXPANDIR NESTE ECRÃ (F11)")
+            self.header_frame.pack(fill=tk.X, before=self.content_frame)
+            self.content_frame.config(padx=12, pady=10)
+            self.preview_col.config(padx=(0, 12))
             self.controls_col.pack(side=tk.RIGHT, fill=tk.Y)
+            self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
             if self.saved_geometry:
                 self.root.geometry(self.saved_geometry)
             self.root.focus_force()
@@ -710,6 +804,61 @@ class SmartCoolApp:
     def _exit_fullscreen(self, event=None):
         if self.is_fullscreen:
             self._toggle_fullscreen()
+
+    def _on_drag_start(self, event):
+        """Regista as coordenadas iniciais ao clicar para arrastar a janela."""
+        if not self.is_fullscreen:
+            self._drag_start_x = event.x_root - self.root.winfo_x()
+            self._drag_start_y = event.y_root - self.root.winfo_y()
+
+    def _on_drag_motion(self, event):
+        """Move a janela suavemente ao arrastar com o rato."""
+        if not self.is_fullscreen:
+            new_x = event.x_root - self._drag_start_x
+            new_y = event.y_root - self._drag_start_y
+            self.root.geometry(f"+{new_x}+{new_y}")
+
+    def _toggle_transparency_mode(self, event=None):
+        """Alterna o modo transparente (Overlay para 2º ecrã)."""
+        current = self.transparent_mode_var.get()
+        self.transparent_mode_var.set(not current)
+        self._on_transparency_changed()
+
+    def _set_window_opacity(self, alpha):
+        """Define a opacidade geral da janela (0.2 a 1.0)."""
+        self.opacity_scale_var.set(alpha)
+        try:
+            self.root.attributes("-alpha", alpha)
+        except Exception:
+            pass
+        pct = int(alpha * 100)
+        self.status_bar.config(text=f"Opacidade da janela ajustada para {pct}%.")
+
+    def _on_transparency_changed(self):
+        """Aplica ou remove o modo de fundo transparente."""
+        is_transparent = self.transparent_mode_var.get()
+        t_info = self.themes.get(self.current_theme_name, {})
+        is_hud_theme = (t_info.get("layout") == "TRANSPARENT_HUD")
+
+        if is_transparent or is_hud_theme:
+            try:
+                self.root.attributes("-transparentcolor", self.CHROMA_KEY_COLOR)
+            except Exception:
+                pass
+            self.canvas.config(bg=self.CHROMA_KEY_COLOR, highlightthickness=0)
+            self.btn_transparency.config(text="✨ OVERLAY ATIVO (T)", fg="#10b981")
+            self.status_bar.config(text="Modo Overlay Transparente ATIVO: Fundo invisível para não tapar o 2º ecrã!")
+        else:
+            try:
+                self.root.attributes("-transparentcolor", "")
+            except Exception:
+                pass
+            self.canvas.config(bg="#07090f", highlightthickness=1)
+            self.btn_transparency.config(text="✨ OVERLAY TRANSPARENTE (T)", fg="#00e5ff")
+            self.status_bar.config(text="Modo transparente desativado. Fundo opaco restaurado.")
+
+        if self.last_stats:
+            self._update_canvas_display(self.last_stats)
 
     def _on_canvas_resize(self, event):
         """Redesenha em alta definição quando o tamanho do Canvas muda."""
@@ -741,6 +890,13 @@ class SmartCoolApp:
             self.chk_cycle.config(fg=color, activeforeground=color)
             self.btn_fullscreen.config(fg=color, activeforeground=color)
             self.last_theme_switch_time = time.time()
+            layout = t.get("layout", "ALL_SENSORS")
+            if layout == "TRANSPARENT_HUD":
+                self.transparent_mode_var.set(True)
+                self._on_transparency_changed()
+            else:
+                if not self.transparent_mode_var.get():
+                    self._on_transparency_changed()
             self.update_preview()
 
     def set_theme_by_name(self, name):
@@ -752,7 +908,7 @@ class SmartCoolApp:
                 t_info = self.themes.get(name, {})
                 layout = t_info.get("layout", "ALL_SENSORS")
                 w_frame = self.render_frame(self.last_stats, width=1280, height=720) if layout in (
-                    "ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER"
+                    "ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER", "TRANSPARENT_HUD"
                 ) else self.render_frame(self.last_stats, width=480, height=320)
                 self.web_server.update_frame(w_frame, self.last_stats)
             return name
@@ -1141,6 +1297,46 @@ class SmartCoolApp:
 
         draw.rectangle([kx0, ky0, kx1, ky1], fill="#334155", outline="#64748b", width=1)
         draw.line([(kx0 + int(3*scale), knob_y), (kx1 - int(3*scale), knob_y)], fill="#f8fafc", width=max(1, int(1.5*scale)))
+
+    def _draw_hud_bracket_card(self, draw, x0, y0, x1, y1, scale, fill=(6, 12, 18), border=(0, 229, 255), bracket_len=14):
+        """Desenha uma caixa HUD estilo cibernético com cantos em suporte [ ] e fundo de vidro fumado."""
+        draw.rectangle([x0, y0, x1, y1], fill=fill, outline=(border[0]//3, border[1]//3, border[2]//3), width=1)
+        bl = int(bracket_len * scale)
+        bw = max(1, int(2 * scale))
+        # Top-Left
+        draw.line([(x0, y0), (x0 + bl, y0)], fill=border, width=bw)
+        draw.line([(x0, y0), (x0, y0 + bl)], fill=border, width=bw)
+        # Top-Right
+        draw.line([(x1 - bl, y0), (x1, y0)], fill=border, width=bw)
+        draw.line([(x1, y0), (x1, y0 + bl)], fill=border, width=bw)
+        # Bottom-Left
+        draw.line([(x0, y1), (x0 + bl, y1)], fill=border, width=bw)
+        draw.line([(x0, y1 - bl), (x0, y1)], fill=border, width=bw)
+        # Bottom-Right
+        draw.line([(x1 - bl, y1), (x1, y1)], fill=border, width=bw)
+        draw.line([(x1, y1 - bl), (x1, y1)], fill=border, width=bw)
+
+    def _draw_circular_hud_meter(self, draw, cx, cy, radius, percent, scale, label="CPU", val_str="45%", temp_str="58°C", primary_color="#00e5ff", temp_color="#10b981"):
+        """Desenha um mostrador HUD circular de arco com retículo e telemetria central."""
+        r = int(radius * scale)
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=(20, 35, 50), width=max(2, int(4 * scale)))
+        start_deg = 135
+        total_span = 270
+        sweep = int(total_span * (max(0, min(100, percent)) / 100.0))
+        if sweep > 0:
+            draw.arc([cx - r, cy - r, cx + r, cy + r], start=start_deg, end=start_deg + sweep, fill=primary_color, width=max(3, int(6 * scale)))
+        r_outer = r + int(6 * scale)
+        for ang in range(135, 406, 27):
+            rad = math.radians(ang)
+            p1 = (cx + (r_outer - int(2*scale)) * math.cos(rad), cy + (r_outer - int(2*scale)) * math.sin(rad))
+            p2 = (cx + (r_outer + int(3*scale)) * math.cos(rad), cy + (r_outer + int(3*scale)) * math.sin(rad))
+            draw.line([p1, p2], fill=(60, 90, 120), width=1)
+        f_lbl = self._get_font("ui", 8.5, scale, bold=True)
+        f_val = self._get_font("mono", 14, scale, bold=True)
+        f_temp = self._get_font("ui", 10, scale, bold=True)
+        draw.text((cx, cy - int(16 * scale)), label, fill="#94a3b8", font=f_lbl, anchor="mm")
+        draw.text((cx, cy + int(2 * scale)), val_str, fill=primary_color, font=f_val, anchor="mm")
+        draw.text((cx, cy + int(20 * scale)), temp_str, fill=temp_color, font=f_temp, anchor="mm")
 
     def render_speedometer_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'Velocímetros de Carro' em qualquer resolução (HD ou 480x320)."""
@@ -2353,6 +2549,233 @@ class SmartCoolApp:
 
         return img
 
+    def render_transparent_hud_view(self, stats, width=1280, height=720):
+        """Renderiza o tema 'HUD Overlay Transparente (Glass HUD)'.
+        Utiliza a cor chroma-key (1, 2, 3) no fundo para transparência 100% nativa no Windows DWM,
+        deixando os mostradores e cartões de vidro a flutuar diretamente sobre o 2º ecrã!"""
+        scale = height / 320.0
+        is_compact = (width <= 640)
+
+        # 1. Fundo Puro Chroma-Key (1, 2, 3) -> 100% transparente no ecrã do PC
+        img = Image.new("RGB", (width, height), (1, 2, 3))
+        draw = ImageDraw.Draw(img)
+
+        # Fontes escaladas
+        f_header = self._get_font("ui", 9.5, scale, bold=True)
+        f_clock = self._get_font("mono", 11, scale, bold=True)
+        f_title = self._get_font("ui", 8.5, scale, bold=True)
+        f_val = self._get_font("mono", 9.5, scale, bold=True)
+        f_small = self._get_font("ui", 8.0, scale, bold=False)
+        f_micro = self._get_font("mono", 7.0, scale, bold=False)
+
+        c_cyan = "#00e5ff"
+        c_emerald = "#10b981"
+        c_amber = "#f59e0b"
+        c_red = "#ef4444"
+        c_slate = "#94a3b8"
+        c_white = "#f8fafc"
+
+        # Barra Superior Flutuante
+        top_h = int(24 * scale)
+        self._draw_hud_bracket_card(draw, int(8*scale), int(4*scale), width - int(8*scale), top_h + int(4*scale), scale, fill=(6, 12, 18), border=(0, 229, 255), bracket_len=8)
+
+        dot_r = int(3 * scale)
+        dot_cx = int(20 * scale)
+        dot_cy = int(16 * scale)
+        draw.ellipse([dot_cx - dot_r, dot_cy - dot_r, dot_cx + dot_r, dot_cy + dot_r], fill=c_emerald)
+
+        draw.text((int(30 * scale), int(16 * scale)), "HUD OVERLAY // 2º ECRÃ TRANSPARENTE", fill=c_white, font=f_header, anchor="lm")
+        if not is_compact:
+            draw.text((int(width * 0.5), int(16 * scale)), "[ TARRASGA TELEMETRY // GLASS MODE ]", fill=c_slate, font=f_small, anchor="mm")
+        draw.text((width - int(18 * scale), int(16 * scale)), stats.get("time", "12:00:00"), fill=c_cyan, font=f_clock, anchor="rm")
+
+        # Conteúdo Central
+        content_y0 = top_h + int(10 * scale)
+        bot_h = int(20 * scale)
+        content_y1 = height - bot_h - int(8 * scale)
+
+        pad = int(8 * scale)
+        usable_w = width - (2 * pad)
+
+        if is_compact:
+            # Layout Compacto para USB (480x320) ou janela reduzida
+            col_w = (usable_w - pad) / 2.0
+            c0_x0 = int(pad)
+            c0_x1 = int(pad + col_w)
+            c1_x0 = int(pad + col_w + pad)
+            c1_x1 = int(width - pad)
+
+            self._draw_hud_bracket_card(draw, c0_x0, content_y0, c0_x1, content_y1, scale, fill=(8, 14, 22), border=(0, 229, 255), bracket_len=12)
+            self._draw_hud_bracket_card(draw, c1_x0, content_y0, c1_x1, content_y1, scale, fill=(8, 14, 22), border=(16, 185, 129), bracket_len=12)
+
+            cpu_u = stats.get("cpu_usage", 38)
+            cpu_t = stats.get("cpu_temp", 52)
+            cpu_t_col = c_red if cpu_t >= 75 else (c_amber if cpu_t >= 60 else c_emerald)
+            self._draw_circular_hud_meter(draw, (c0_x0 + c0_x1)//2, content_y0 + int(60*scale), 38, cpu_u, scale, label="CPU LOAD", val_str=f"{cpu_u}%", temp_str=f"{cpu_t}°C", primary_color=c_cyan, temp_color=cpu_t_col)
+
+            draw.text(((c0_x0 + c0_x1)//2, content_y0 + int(115*scale)), f"{stats.get('cpu_clock', 4.50):.2f} GHz  |  {stats.get('cpu_fan', 1200)} RPM", fill=c_white, font=f_small, anchor="mm")
+            draw.text(((c0_x0 + c0_x1)//2, content_y0 + int(130*scale)), f"RAM: {stats.get('ram_used_gb', 14.2):.1f}/{stats.get('ram_total_gb', 32.0):.0f} GB ({stats.get('ram_usage_pct', 44)}%)", fill=c_slate, font=f_small, anchor="mm")
+
+            gpu_u = stats.get("gpu_usage", 65)
+            gpu_t = stats.get("gpu_temp", 64)
+            gpu_t_col = c_red if gpu_t >= 75 else (c_amber if gpu_t >= 60 else c_emerald)
+            self._draw_circular_hud_meter(draw, (c1_x0 + c1_x1)//2, content_y0 + int(60*scale), 38, gpu_u, scale, label="GPU LOAD", val_str=f"{gpu_u}%", temp_str=f"{gpu_t}°C", primary_color=c_emerald, temp_color=gpu_t_col)
+
+            draw.text(((c1_x0 + c1_x1)//2, content_y0 + int(115*scale)), f"VRAM: {stats.get('gpu_vram_used', 6.2):.1f}/{stats.get('gpu_vram_total', 12.0):.0f} GB ({stats.get('gpu_vram_pct', 52)}%)", fill=c_white, font=f_small, anchor="mm")
+            draw.text(((c1_x0 + c1_x1)//2, content_y0 + int(130*scale)), f"NET DL: {stats.get('net_down_str', '12.4 MB/s')} | PWR: ~{stats.get('gpu_power', 165)}W", fill=c_slate, font=f_small, anchor="mm")
+
+        else:
+            # Layout HD de 4 Colunas (1280x720 / 1920x1080)
+            gap = int(10 * scale)
+            col_w = (usable_w - (3 * gap)) / 4.0
+            cols = []
+            for i in range(4):
+                x0 = int(pad + i * (col_w + gap))
+                x1 = int(x0 + col_w)
+                cols.append((x0, x1))
+
+            # 1. PROCESSADOR (CPU)
+            c0_x0, c0_x1 = cols[0]
+            self._draw_hud_bracket_card(draw, c0_x0, content_y0, c0_x1, content_y1, scale, fill=(8, 14, 22), border=(0, 229, 255), bracket_len=14)
+            draw.text((c0_x0 + int(12*scale), content_y0 + int(12*scale)), "SYS // PROCESSADOR (CPU)", fill=c_cyan, font=f_title)
+
+            cpu_u = stats.get("cpu_usage", 42)
+            cpu_t = stats.get("cpu_temp", 58)
+            cpu_t_col = c_red if cpu_t >= 75 else (c_amber if cpu_t >= 60 else c_emerald)
+            cx0 = (c0_x0 + c0_x1) // 2
+            cy0 = content_y0 + int(90 * scale)
+            self._draw_circular_hud_meter(draw, cx0, cy0, 48, cpu_u, scale, label="CORE LOAD", val_str=f"{cpu_u}%", temp_str=f"{cpu_t}°C", primary_color=c_cyan, temp_color=cpu_t_col)
+
+            lines_cpu = [
+                ("FREQUÊNCIA:", f"{stats.get('cpu_clock', 4.80):.2f} GHz"),
+                ("POTÊNCIA:", f"~{stats.get('cpu_power', 68)} W"),
+                ("VENTOINHA:", f"{stats.get('cpu_fan', 1350)} RPM"),
+                ("CORES / THREADS:", f"{stats.get('cpu_cores', '14C / 20T')}"),
+            ]
+            ly = cy0 + int(68 * scale)
+            for lbl, v in lines_cpu:
+                draw.text((c0_x0 + int(14*scale), ly), lbl, fill=c_slate, font=f_small)
+                draw.text((c0_x1 - int(14*scale), ly), v, fill=c_white, font=f_val, anchor="ra")
+                ly += int(16 * scale)
+
+            # 2. MEMÓRIA RAM & VRAM
+            c1_x0, c1_x1 = cols[1]
+            self._draw_hud_bracket_card(draw, c1_x0, content_y0, c1_x1, content_y1, scale, fill=(8, 14, 22), border=(56, 189, 248), bracket_len=14)
+            draw.text((c1_x0 + int(12*scale), content_y0 + int(12*scale)), "SYS // MEMÓRIA RAM & VRAM", fill="#38bdf8", font=f_title)
+
+            ram_pct = stats.get("ram_usage_pct", 48)
+            draw.text((c1_x0 + int(14*scale), content_y0 + int(42*scale)), f"RAM DO SISTEMA ({ram_pct}%)", fill=c_white, font=f_small)
+            draw.text((c1_x1 - int(14*scale), content_y0 + int(42*scale)), f"{stats.get('ram_used_gb', 15.4):.1f} / {stats.get('ram_total_gb', 32.0):.0f} GB", fill=c_cyan, font=f_val, anchor="ra")
+
+            bx0 = c1_x0 + int(14*scale)
+            bx1 = c1_x1 - int(14*scale)
+            by0 = content_y0 + int(58*scale)
+            by1 = by0 + int(8*scale)
+            draw.rectangle([bx0, by0, bx1, by1], fill=(15, 23, 42), outline=(30, 41, 59))
+            fill_w = int((bx1 - bx0) * (ram_pct / 100.0))
+            if fill_w > 0:
+                draw.rectangle([bx0, by0, bx0 + fill_w, by1], fill=c_cyan)
+            draw.text((c1_x0 + int(14*scale), by1 + int(4*scale)), f"Livre: {stats.get('ram_free_gb', 16.6):.1f} GB", fill=c_slate, font=f_micro)
+
+            vram_pct = stats.get("gpu_vram_pct", 54)
+            draw.text((c1_x0 + int(14*scale), content_y0 + int(100*scale)), f"VRAM DEDICADA ({vram_pct}%)", fill=c_white, font=f_small)
+            draw.text((c1_x1 - int(14*scale), content_y0 + int(100*scale)), f"{stats.get('gpu_vram_used', 6.5):.1f} / {stats.get('gpu_vram_total', 12.0):.0f} GB", fill=c_emerald, font=f_val, anchor="ra")
+
+            v_by0 = content_y0 + int(116*scale)
+            v_by1 = v_by0 + int(8*scale)
+            draw.rectangle([bx0, v_by0, bx1, v_by1], fill=(15, 23, 42), outline=(30, 41, 59))
+            vfill_w = int((bx1 - bx0) * (vram_pct / 100.0))
+            if vfill_w > 0:
+                draw.rectangle([bx0, v_by0, bx0 + vfill_w, v_by1], fill=c_emerald)
+            draw.text((c1_x0 + int(14*scale), v_by1 + int(4*scale)), "Placa Gráfica GDDR6X", fill=c_slate, font=f_micro)
+
+            m_ly = content_y0 + int(160 * scale)
+            lines_mem = [
+                ("TAXA RESPOSTA:", "1.2 ns // LOW LATENCY"),
+                ("PAGINAÇÃO:", "3.4 GB ATIVA"),
+                ("BUFFERS GPU:", "ESTÁVEIS // 0 DROPS"),
+            ]
+            for lbl, v in lines_mem:
+                draw.text((c1_x0 + int(14*scale), m_ly), lbl, fill=c_slate, font=f_micro)
+                draw.text((c1_x1 - int(14*scale), m_ly), v, fill=c_slate, font=f_micro, anchor="ra")
+                m_ly += int(14 * scale)
+
+            # 3. ARMAZENAMENTO & REDE
+            c2_x0, c2_x1 = cols[2]
+            self._draw_hud_bracket_card(draw, c2_x0, content_y0, c2_x1, content_y1, scale, fill=(8, 14, 22), border=(245, 158, 11), bracket_len=14)
+            draw.text((c2_x0 + int(12*scale), content_y0 + int(12*scale)), "SYS // ARMAZENAMENTO & REDE", fill=c_amber, font=f_title)
+
+            c_pct = stats.get("disk_c_pct", 84)
+            draw.text((c2_x0 + int(14*scale), content_y0 + int(40*scale)), f"DISCO C: [NVMe] ({c_pct}%)", fill=c_white, font=f_small)
+            draw.text((c2_x1 - int(14*scale), content_y0 + int(40*scale)), f"{stats.get('disk_c_used', 780)} / {stats.get('disk_c_total', 930)} GB", fill=c_amber, font=f_val, anchor="ra")
+
+            d_bx0 = c2_x0 + int(14*scale)
+            d_bx1 = c2_x1 - int(14*scale)
+            d_by0 = content_y0 + int(56*scale)
+            d_by1 = d_by0 + int(6*scale)
+            draw.rectangle([d_bx0, d_by0, d_bx1, d_by1], fill=(15, 23, 42), outline=(30, 41, 59))
+            dfill_w = int((d_bx1 - d_bx0) * (c_pct / 100.0))
+            if dfill_w > 0:
+                draw.rectangle([d_bx0, d_by0, d_bx0 + dfill_w, d_by1], fill=c_amber)
+
+            e_pct = stats.get("disk_e_pct", 83)
+            draw.text((c2_x0 + int(14*scale), content_y0 + int(80*scale)), f"DISCO E: [GAMES] ({e_pct}%)", fill=c_white, font=f_small)
+            draw.text((c2_x1 - int(14*scale), content_y0 + int(80*scale)), f"{stats.get('disk_e_used', 1540)} / {stats.get('disk_e_total', 1860)} GB", fill=c_amber, font=f_val, anchor="ra")
+
+            e_by0 = content_y0 + int(96*scale)
+            e_by1 = e_by0 + int(6*scale)
+            draw.rectangle([d_bx0, e_by0, d_bx1, e_by1], fill=(15, 23, 42), outline=(30, 41, 59))
+            efill_w = int((d_bx1 - d_bx0) * (e_pct / 100.0))
+            if efill_w > 0:
+                draw.rectangle([d_bx0, e_by0, d_bx0 + efill_w, e_by1], fill=c_amber)
+
+            d_ly = content_y0 + int(126 * scale)
+            lines_io = [
+                ("DISCO LEITURA:", stats.get("disk_read_str", "14.2 MB/s")),
+                ("DISCO ESCRITA:", stats.get("disk_write_str", "2.8 MB/s")),
+                ("DOWNLOAD (DL):", f"▲ {stats.get('net_down_str', '18.4 MB/s')}"),
+                ("UPLOAD (UL):", f"▼ {stats.get('net_up_str', '2.1 MB/s')}"),
+            ]
+            for lbl, v in lines_io:
+                draw.text((c2_x0 + int(14*scale), d_ly), lbl, fill=c_slate, font=f_small)
+                col_v = c_emerald if "▲" in v else (c_cyan if "▼" in v else c_white)
+                draw.text((c2_x1 - int(14*scale), d_ly), v, fill=col_v, font=f_val, anchor="ra")
+                d_ly += int(16 * scale)
+
+            # 4. PLACA GRÁFICA (GPU)
+            c3_x0, c3_x1 = cols[3]
+            self._draw_hud_bracket_card(draw, c3_x0, content_y0, c3_x1, content_y1, scale, fill=(8, 14, 22), border=(16, 185, 129), bracket_len=14)
+            draw.text((c3_x0 + int(12*scale), content_y0 + int(12*scale)), f"SYS // {stats.get('gpu_name', 'GEFORCE RTX')}", fill=c_emerald, font=f_title)
+
+            gpu_u = stats.get("gpu_usage", 74)
+            gpu_t = stats.get("gpu_temp", 67)
+            gpu_t_col = c_red if gpu_t >= 75 else (c_amber if gpu_t >= 60 else c_emerald)
+            cx3 = (c3_x0 + c3_x1) // 2
+            cy3 = content_y0 + int(90 * scale)
+            self._draw_circular_hud_meter(draw, cx3, cy3, 48, gpu_u, scale, label="GPU LOAD", val_str=f"{gpu_u}%", temp_str=f"{gpu_t}°C", primary_color=c_emerald, temp_color=gpu_t_col)
+
+            lines_gpu = [
+                ("FREQUÊNCIA:", f"{stats.get('gpu_clock', 2640)} MHz"),
+                ("POTÊNCIA:", f"~{stats.get('gpu_power', 185)} W"),
+                ("VENTOINHA:", f"{stats.get('gpu_fan', 1650)} RPM"),
+                ("DIRECTX / RT:", "DX12 ULTIMATE // ON"),
+            ]
+            gly = cy3 + int(68 * scale)
+            for lbl, v in lines_gpu:
+                draw.text((c3_x0 + int(14*scale), gly), lbl, fill=c_slate, font=f_small)
+                draw.text((c3_x1 - int(14*scale), gly), v, fill=c_white, font=f_val, anchor="ra")
+                gly += int(16 * scale)
+
+        # Barra Inferior de Atalhos HUD
+        bot_y0 = height - bot_h - int(4 * scale)
+        bot_y1 = height - int(4 * scale)
+        self._draw_hud_bracket_card(draw, int(8*scale), bot_y0, width - int(8*scale), bot_y1, scale, fill=(6, 12, 18), border=(0, 229, 255), bracket_len=6)
+
+        draw.text((int(20 * scale), (bot_y0 + bot_y1)//2), "💡 ATALHOS: [F11] TELA CHEIA 2º ECRÃ   |   [T] ALTERNAR TRANSPARÊNCIA HUD   |   [ESC] RESTAURAR JANELA", fill="#94a3b8", font=f_micro, anchor="lm")
+        draw.text((width - int(20 * scale), (bot_y0 + bot_y1)//2), f"FPS: {stats.get('fps', 60)}  //  UPTIME: {stats.get('uptime', '3h 24m')}", fill=c_cyan, font=f_micro, anchor="rm")
+
+        return img
+
     def render_frame(self, stats, width=480, height=320):
         """Renderiza o frame solicitado na resolução desejada."""
         theme_info = self.themes.get(self.current_theme_name, self.themes["Master Telemetry (Todos os Sensores)"])
@@ -2376,6 +2799,8 @@ class SmartCoolApp:
             return self.render_peugeot_508_view(stats, width, height)
         elif layout == "DJ_MIXER":
             return self.render_mixer_view(stats, width, height)
+        elif layout == "TRANSPARENT_HUD":
+            return self.render_transparent_hud_view(stats, width, height)
 
         # Temas Legados (480x320)
         if os.path.exists(self.bg_path):
@@ -2454,7 +2879,7 @@ class SmartCoolApp:
         theme_info = self.themes.get(self.current_theme_name, {})
         layout = theme_info.get("layout", "ALL_SENSORS")
 
-        if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER"):
+        if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER", "TRANSPARENT_HUD"):
             display_frame = self.render_frame(stats, width=cw, height=ch)
             self.preview_image = ImageTk.PhotoImage(display_frame)
             self.canvas.delete("all")
@@ -2473,7 +2898,7 @@ class SmartCoolApp:
 
         # Se a transmissão contínua estiver parada, envia o frame estático inicial para o servidor Wi-Fi
         if not self.running and self.wifi_enabled_var.get() and self.web_server.is_running:
-            wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER") else display_frame
+            wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER", "TRANSPARENT_HUD") else display_frame
             self.web_server.update_frame(wifi_frame, stats)
 
     def update_preview(self):
@@ -2508,7 +2933,7 @@ class SmartCoolApp:
                     try:
                         theme_info = self.themes.get(self.current_theme_name, {})
                         layout = theme_info.get("layout", "ALL_SENSORS")
-                        wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER") else usb_frame
+                        wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER", "TRANSPARENT_HUD") else usb_frame
                         self.web_server.update_frame(wifi_frame, stats)
                     except Exception as we:
                         print(f"[App] Erro na frame Wi-Fi 720p: {we}")
