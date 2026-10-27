@@ -1,9 +1,9 @@
 @echo off
-title Enviar Tema Mesa de Mistura DJ para o Ecra
-cd /d "%~dp0SmartCoolApp"
+title Enviar Mesa de Mistura DJ (Studio Audio Equalizer) para o Ecra USB
+cd /d "%~dp0..\SmartCoolApp"
 
 echo ======================================================
-echo    A ENVIAR TEMA MESA DE MISTURA DJ // EQUALIZADOR
+echo    A ENVIAR MESA DE MISTURA DJ (STUDIO AUDIO EQUALIZER)
 echo ======================================================
 echo.
 

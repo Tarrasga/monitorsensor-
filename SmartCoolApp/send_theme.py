@@ -28,21 +28,23 @@ assets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
 image_path = None
 if target in ("sensors", "sensores", "master"):
-    image_path = os.path.join(base_dir, "master_sensors_preview.png")
+    image_path = os.path.join(assets_dir, "master_telemetry_usb.png")
+    if not os.path.exists(image_path):
+        image_path = os.path.join(assets_dir, "master_sensors_preview.png")
 elif target in ("monster_gif", "gif", "animado"):
     image_path = os.path.join(assets_dir, "monster_cans_animated.gif")
 elif target in ("monster_cans", "cans"):
-    image_path = os.path.join(base_dir, "monster_cans_preview.png")
+    image_path = os.path.join(assets_dir, "monster_cans.png")
     if not os.path.exists(image_path):
-        image_path = os.path.join(assets_dir, "monster_cans.png")
+        image_path = os.path.join(assets_dir, "monster_cans_480x320.png")
 elif target in ("monster_claw", "claw"):
-    image_path = os.path.join(base_dir, "monster_claw_preview.png")
+    image_path = os.path.join(assets_dir, "monster_claw.png")
     if not os.path.exists(image_path):
-        image_path = os.path.join(assets_dir, "monster_claw.png")
+        image_path = os.path.join(assets_dir, "monster_claw_480x320.png")
 elif target in ("rog", "tarrasga"):
-    image_path = os.path.join(base_dir, "tarrasga_rog_preview.png")
+    image_path = os.path.join(assets_dir, "background.png")
     if not os.path.exists(image_path):
-        image_path = os.path.join(assets_dir, "background.png")
+        image_path = os.path.join(assets_dir, "tarrasga_rog_480x320.png")
 elif target in ("speedometer", "velocimetros", "dials"):
     image_path = os.path.join(assets_dir, "preview_theme_speedometer.png")
 elif target in ("airplane", "aviao", "hud", "cockpit_aviao"):

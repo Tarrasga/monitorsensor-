@@ -1,9 +1,9 @@
 @echo off
-title Enviar Tema Cockpit GT para o Ecra
-cd /d "%~dp0SmartCoolApp"
+title Enviar Cockpit de Carro GT (Racing Telemetry) para o Ecra USB
+cd /d "%~dp0..\SmartCoolApp"
 
 echo ======================================================
-echo  A ENVIAR TEMA COCKPIT GT / RACING TELEMETRY
+echo    A ENVIAR COCKPIT DE CARRO GT (RACING TELEMETRY)
 echo ======================================================
 echo.
 

@@ -1,13 +1,13 @@
 @echo off
-title Enviar Tema Ford Fiesta XR2 Mk2 para o Ecra
-cd /d "%~dp0SmartCoolApp"
+title Enviar Master Telemetry (Todos os Sensores) para o Ecra USB
+cd /d "%~dp0..\SmartCoolApp"
 
 echo ======================================================
-echo  A ENVIAR TEMA FORD FIESTA XR2 MK2 HOT HATCH
+echo    A ENVIAR MASTER TELEMETRY (TODOS OS SENSORES)
 echo ======================================================
 echo.
 
 powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"CommandLine like '%%app.py%%'\" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >nul 2>&1
 
-python send_theme.py xr2
+python send_theme.py sensors
 pause
