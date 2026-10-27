@@ -2552,7 +2552,7 @@ class SmartCoolApp:
     def render_transparent_hud_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'HUD Overlay Transparente (Glass HUD)'.
         Utiliza a cor chroma-key (1, 2, 3) no fundo para transparência 100% nativa no Windows DWM,
-        deixando os mostradores e cartões de vidro a flutuar diretamente sobre o 2º ecrã!"""
+        deixando os mostradores e cartões de vidro a flutuar diretamente sobre o 2º ecrã sem colisões de texto!"""
         scale = height / 320.0
         is_compact = (width <= 640)
 
@@ -2560,13 +2560,13 @@ class SmartCoolApp:
         img = Image.new("RGB", (width, height), (1, 2, 3))
         draw = ImageDraw.Draw(img)
 
-        # Fontes escaladas
-        f_header = self._get_font("ui", 9.5, scale, bold=True)
-        f_clock = self._get_font("mono", 11, scale, bold=True)
-        f_title = self._get_font("ui", 8.5, scale, bold=True)
-        f_val = self._get_font("mono", 9.5, scale, bold=True)
-        f_small = self._get_font("ui", 8.0, scale, bold=False)
-        f_micro = self._get_font("mono", 7.0, scale, bold=False)
+        # Fontes escaladas com fator controlado para evitar fontes gigantes e colisões
+        f_header = self._get_font("ui", 10.0, scale, bold=True)
+        f_clock = self._get_font("mono", 11.5, scale, bold=True)
+        f_title = self._get_font("ui", 9.5, scale, bold=True)
+        f_val = self._get_font("mono", 10.0, scale, bold=True)
+        f_small = self._get_font("ui", 9.0, scale, bold=False)
+        f_micro = self._get_font("mono", 8.0, scale, bold=False)
 
         c_cyan = "#00e5ff"
         c_emerald = "#10b981"
@@ -2576,22 +2576,31 @@ class SmartCoolApp:
         c_white = "#f8fafc"
 
         # Barra Superior Flutuante
-        top_h = int(24 * scale)
+        top_h = int(24 * min(1.3, scale))
         self._draw_hud_bracket_card(draw, int(8*scale), int(4*scale), width - int(8*scale), top_h + int(4*scale), scale, fill=(6, 12, 18), border=(0, 229, 255), bracket_len=8)
 
-        dot_r = int(3 * scale)
+        dot_r = int(3.5 * min(1.3, scale))
         dot_cx = int(20 * scale)
-        dot_cy = int(16 * scale)
+        dot_cy = (int(4*scale) + top_h + int(4*scale)) // 2
         draw.ellipse([dot_cx - dot_r, dot_cy - dot_r, dot_cx + dot_r, dot_cy + dot_r], fill=c_emerald)
 
-        draw.text((int(30 * scale), int(16 * scale)), "HUD OVERLAY // 2º ECRÃ TRANSPARENTE", fill=c_white, font=f_header, anchor="lm")
-        if not is_compact:
-            draw.text((int(width * 0.5), int(16 * scale)), "[ TARRASGA TELEMETRY // GLASS MODE ]", fill=c_slate, font=f_small, anchor="mm")
-        draw.text((width - int(18 * scale), int(16 * scale)), stats.get("time", "12:00:00"), fill=c_cyan, font=f_clock, anchor="rm")
+        title_text = "HUD OVERLAY // 2º ECRÃ"
+        draw.text((int(32 * scale), dot_cy), title_text, fill=c_white, font=f_header, anchor="lm")
+        t_bbox = draw.textbbox((int(32 * scale), dot_cy), title_text, font=f_header, anchor="lm")
+
+        clock_str = stats.get("time", "12:00:00")
+        c_bbox = draw.textbbox((width - int(18 * scale), dot_cy), clock_str, font=f_clock, anchor="rm")
+        draw.text((width - int(18 * scale), dot_cy), clock_str, fill=c_cyan, font=f_clock, anchor="rm")
+
+        # Desenha subtítulo central apenas se houver espaço livre suficiente (garante zero sobreposição)
+        sub_text = "[ TARRASGA TELEMETRY // GLASS MODE ]"
+        sub_bbox = draw.textbbox((width // 2, dot_cy), sub_text, font=f_small, anchor="mm")
+        if t_bbox[2] + 40 < sub_bbox[0] and sub_bbox[2] + 40 < c_bbox[0]:
+            draw.text((width // 2, dot_cy), sub_text, fill=c_slate, font=f_small, anchor="mm")
 
         # Conteúdo Central
         content_y0 = top_h + int(10 * scale)
-        bot_h = int(20 * scale)
+        bot_h = int(22 * min(1.3, scale))
         content_y1 = height - bot_h - int(8 * scale)
 
         pad = int(8 * scale)
@@ -2625,154 +2634,169 @@ class SmartCoolApp:
             draw.text(((c1_x0 + c1_x1)//2, content_y0 + int(130*scale)), f"NET DL: {stats.get('net_down_str', '12.4 MB/s')} | PWR: ~{stats.get('gpu_power', 165)}W", fill=c_slate, font=f_small, anchor="mm")
 
         else:
-            # Layout HD de 4 Colunas (1280x720 / 1920x1080)
-            gap = int(10 * scale)
-            col_w = (usable_w - (3 * gap)) / 4.0
-            cols = []
-            for i in range(4):
-                x0 = int(pad + i * (col_w + gap))
-                x1 = int(x0 + col_w)
-                cols.append((x0, x1))
+            # Grelha 2x2 Ampla (Perfeita para 1020x602, 1280x720 e 1920x1080)
+            gap_x = int(10 * scale)
+            gap_y = int(10 * scale)
+            card_w = (usable_w - gap_x) // 2
+            card_h = (content_y1 - content_y0 - gap_y) // 2
 
-            # 1. PROCESSADOR (CPU)
-            c0_x0, c0_x1 = cols[0]
-            self._draw_hud_bracket_card(draw, c0_x0, content_y0, c0_x1, content_y1, scale, fill=(8, 14, 22), border=(0, 229, 255), bracket_len=14)
-            draw.text((c0_x0 + int(12*scale), content_y0 + int(12*scale)), "SYS // PROCESSADOR (CPU)", fill=c_cyan, font=f_title)
+            # 1. Cartão Top-Left: PROCESSADOR (CPU)
+            c0_x0 = pad
+            c0_y0 = content_y0
+            c0_x1 = c0_x0 + card_w
+            c0_y1 = c0_y0 + card_h
+            self._draw_hud_bracket_card(draw, c0_x0, c0_y0, c0_x1, c0_y1, scale, fill=(8, 14, 22), border=(0, 229, 255), bracket_len=14)
+            draw.text((c0_x0 + int(14*scale), c0_y0 + int(10*scale)), "SYS // PROCESSADOR (CPU)", fill=c_cyan, font=f_title)
 
-            cpu_u = stats.get("cpu_usage", 42)
-            cpu_t = stats.get("cpu_temp", 58)
+            dial_cx = c0_x0 + int(card_w * 0.28)
+            dial_cy = (c0_y0 + c0_y1) // 2 + int(6*scale)
+            cpu_u = stats.get("cpu_usage", 35)
+            cpu_t = stats.get("cpu_temp", 54)
             cpu_t_col = c_red if cpu_t >= 75 else (c_amber if cpu_t >= 60 else c_emerald)
-            cx0 = (c0_x0 + c0_x1) // 2
-            cy0 = content_y0 + int(90 * scale)
-            self._draw_circular_hud_meter(draw, cx0, cy0, 48, cpu_u, scale, label="CORE LOAD", val_str=f"{cpu_u}%", temp_str=f"{cpu_t}°C", primary_color=c_cyan, temp_color=cpu_t_col)
+            self._draw_circular_hud_meter(draw, dial_cx, dial_cy, 38, cpu_u, scale, label="CORE LOAD", val_str=f"{cpu_u}%", temp_str=f"{cpu_t}°C", primary_color=c_cyan, temp_color=cpu_t_col)
 
+            rx0 = c0_x0 + int(card_w * 0.54)
+            rx1 = c0_x1 - int(16*scale)
             lines_cpu = [
                 ("FREQUÊNCIA:", f"{stats.get('cpu_clock', 4.80):.2f} GHz"),
-                ("POTÊNCIA:", f"~{stats.get('cpu_power', 68)} W"),
-                ("VENTOINHA:", f"{stats.get('cpu_fan', 1350)} RPM"),
-                ("CORES / THREADS:", f"{stats.get('cpu_cores', '14C / 20T')}"),
+                ("POTÊNCIA:", f"~{stats.get('cpu_power', 65)} W"),
+                ("VENTOINHA:", f"{stats.get('cpu_fan', 1280)} RPM"),
+                ("CORES:", f"{stats.get('cpu_cores', '14C / 20T')}"),
             ]
-            ly = cy0 + int(68 * scale)
+            ry = c0_y0 + int(36*scale)
+            step_y = max(18, int((c0_y1 - c0_y0 - 52*scale) / len(lines_cpu)))
             for lbl, v in lines_cpu:
-                draw.text((c0_x0 + int(14*scale), ly), lbl, fill=c_slate, font=f_small)
-                draw.text((c0_x1 - int(14*scale), ly), v, fill=c_white, font=f_val, anchor="ra")
-                ly += int(16 * scale)
+                draw.text((rx0, ry), lbl, fill=c_slate, font=f_small, anchor="la")
+                draw.text((rx1, ry), v, fill=c_white, font=f_val, anchor="ra")
+                ry += step_y
 
-            # 2. MEMÓRIA RAM & VRAM
-            c1_x0, c1_x1 = cols[1]
-            self._draw_hud_bracket_card(draw, c1_x0, content_y0, c1_x1, content_y1, scale, fill=(8, 14, 22), border=(56, 189, 248), bracket_len=14)
-            draw.text((c1_x0 + int(12*scale), content_y0 + int(12*scale)), "SYS // MEMÓRIA RAM & VRAM", fill="#38bdf8", font=f_title)
+            # 2. Cartão Top-Right: PLACA GRÁFICA (GPU)
+            c1_x0 = c0_x1 + gap_x
+            c1_y0 = content_y0
+            c1_x1 = width - pad
+            c1_y1 = c1_y0 + card_h
+            self._draw_hud_bracket_card(draw, c1_x0, c1_y0, c1_x1, c1_y1, scale, fill=(8, 14, 22), border=(16, 185, 129), bracket_len=14)
+            draw.text((c1_x0 + int(14*scale), c1_y0 + int(10*scale)), f"SYS // {stats.get('gpu_name', 'GEFORCE RTX')}", fill=c_emerald, font=f_title)
 
-            ram_pct = stats.get("ram_usage_pct", 48)
-            draw.text((c1_x0 + int(14*scale), content_y0 + int(42*scale)), f"RAM DO SISTEMA ({ram_pct}%)", fill=c_white, font=f_small)
-            draw.text((c1_x1 - int(14*scale), content_y0 + int(42*scale)), f"{stats.get('ram_used_gb', 15.4):.1f} / {stats.get('ram_total_gb', 32.0):.0f} GB", fill=c_cyan, font=f_val, anchor="ra")
+            g_dial_cx = c1_x0 + int(card_w * 0.28)
+            g_dial_cy = dial_cy
+            gpu_u = stats.get("gpu_usage", 72)
+            gpu_t = stats.get("gpu_temp", 66)
+            gpu_t_col = c_red if gpu_t >= 75 else (c_amber if gpu_t >= 60 else c_emerald)
+            self._draw_circular_hud_meter(draw, g_dial_cx, g_dial_cy, 38, gpu_u, scale, label="GPU LOAD", val_str=f"{gpu_u}%", temp_str=f"{gpu_t}°C", primary_color=c_emerald, temp_color=gpu_t_col)
 
-            bx0 = c1_x0 + int(14*scale)
-            bx1 = c1_x1 - int(14*scale)
-            by0 = content_y0 + int(58*scale)
-            by1 = by0 + int(8*scale)
+            grx0 = c1_x0 + int(card_w * 0.54)
+            grx1 = c1_x1 - int(16*scale)
+            lines_gpu = [
+                ("FREQUÊNCIA:", f"{stats.get('gpu_clock', 2610)} MHz"),
+                ("POTÊNCIA:", f"~{stats.get('gpu_power', 182)} W"),
+                ("VENTOINHA:", f"{stats.get('gpu_fan', 1540)} RPM"),
+                ("DIRECTX:", "DX12 // RT ON"),
+            ]
+            gry = c1_y0 + int(36*scale)
+            for lbl, v in lines_gpu:
+                draw.text((grx0, gry), lbl, fill=c_slate, font=f_small, anchor="la")
+                draw.text((grx1, gry), v, fill=c_white, font=f_val, anchor="ra")
+                gry += step_y
+
+            # 3. Cartão Bottom-Left: MEMÓRIA RAM & VRAM
+            c2_x0 = pad
+            c2_y0 = c0_y1 + gap_y
+            c2_x1 = c2_x0 + card_w
+            c2_y1 = content_y1
+            self._draw_hud_bracket_card(draw, c2_x0, c2_y0, c2_x1, c2_y1, scale, fill=(8, 14, 22), border=(56, 189, 248), bracket_len=14)
+            draw.text((c2_x0 + int(14*scale), c2_y0 + int(10*scale)), "SYS // MEMÓRIA RAM & VRAM DEDICADA", fill="#38bdf8", font=f_title)
+
+            # RAM Bar
+            ram_pct = stats.get("ram_usage_pct", 46)
+            my_y0 = c2_y0 + int(34*scale)
+            draw.text((c2_x0 + int(16*scale), my_y0), f"RAM DO SISTEMA ({ram_pct}%)", fill=c_white, font=f_small, anchor="la")
+            draw.text((c2_x1 - int(16*scale), my_y0), f"{stats.get('ram_used_gb', 14.8):.1f} / {stats.get('ram_total_gb', 32.0):.0f} GB", fill=c_cyan, font=f_val, anchor="ra")
+
+            bx0 = c2_x0 + int(16*scale)
+            bx1 = c2_x1 - int(16*scale)
+            by0 = my_y0 + int(16*scale)
+            by1 = by0 + int(9*scale)
             draw.rectangle([bx0, by0, bx1, by1], fill=(15, 23, 42), outline=(30, 41, 59))
             fill_w = int((bx1 - bx0) * (ram_pct / 100.0))
             if fill_w > 0:
                 draw.rectangle([bx0, by0, bx0 + fill_w, by1], fill=c_cyan)
-            draw.text((c1_x0 + int(14*scale), by1 + int(4*scale)), f"Livre: {stats.get('ram_free_gb', 16.6):.1f} GB", fill=c_slate, font=f_micro)
+            draw.text((c2_x0 + int(16*scale), by1 + int(4*scale)), f"Memória Livre: {stats.get('ram_free_gb', 17.2):.1f} GB", fill=c_slate, font=f_micro)
 
-            vram_pct = stats.get("gpu_vram_pct", 54)
-            draw.text((c1_x0 + int(14*scale), content_y0 + int(100*scale)), f"VRAM DEDICADA ({vram_pct}%)", fill=c_white, font=f_small)
-            draw.text((c1_x1 - int(14*scale), content_y0 + int(100*scale)), f"{stats.get('gpu_vram_used', 6.5):.1f} / {stats.get('gpu_vram_total', 12.0):.0f} GB", fill=c_emerald, font=f_val, anchor="ra")
+            # VRAM Bar
+            vram_pct = stats.get("gpu_vram_pct", 58)
+            vy_y0 = by1 + int(18*scale)
+            draw.text((c2_x0 + int(16*scale), vy_y0), f"VRAM DEDICADA ({vram_pct}%)", fill=c_white, font=f_small, anchor="la")
+            draw.text((c2_x1 - int(16*scale), vy_y0), f"{stats.get('gpu_vram_used', 7.0):.1f} / {stats.get('gpu_vram_total', 12.0):.0f} GB", fill=c_emerald, font=f_val, anchor="ra")
 
-            v_by0 = content_y0 + int(116*scale)
-            v_by1 = v_by0 + int(8*scale)
+            v_by0 = vy_y0 + int(16*scale)
+            v_by1 = v_by0 + int(9*scale)
             draw.rectangle([bx0, v_by0, bx1, v_by1], fill=(15, 23, 42), outline=(30, 41, 59))
             vfill_w = int((bx1 - bx0) * (vram_pct / 100.0))
             if vfill_w > 0:
                 draw.rectangle([bx0, v_by0, bx0 + vfill_w, v_by1], fill=c_emerald)
-            draw.text((c1_x0 + int(14*scale), v_by1 + int(4*scale)), "Placa Gráfica GDDR6X", fill=c_slate, font=f_micro)
+            draw.text((c2_x0 + int(16*scale), v_by1 + int(4*scale)), "Placa Gráfica GDDR6X", fill=c_slate, font=f_micro)
 
-            m_ly = content_y0 + int(160 * scale)
-            lines_mem = [
-                ("TAXA RESPOSTA:", "1.2 ns // LOW LATENCY"),
-                ("PAGINAÇÃO:", "3.4 GB ATIVA"),
-                ("BUFFERS GPU:", "ESTÁVEIS // 0 DROPS"),
+            # 4. Cartão Bottom-Right: ARMAZENAMENTO & REDE
+            c3_x0 = c2_x1 + gap_x
+            c3_y0 = c1_y1 + gap_y
+            c3_x1 = width - pad
+            c3_y1 = content_y1
+            self._draw_hud_bracket_card(draw, c3_x0, c3_y0, c3_x1, c3_y1, scale, fill=(8, 14, 22), border=(245, 158, 11), bracket_len=14)
+            draw.text((c3_x0 + int(14*scale), c3_y0 + int(10*scale)), "SYS // ARMAZENAMENTO & REDE", fill=c_amber, font=f_title)
+
+            sub_gap = int(14 * scale)
+            sub_w = (card_w - int(32*scale) - sub_gap) // 2
+            d_x0 = c3_x0 + int(16*scale)
+            d_x1 = d_x0 + sub_w
+
+            # Disco C:
+            c_pct = stats.get("disk_c_pct", 82)
+            dy0 = c3_y0 + int(34*scale)
+            draw.text((d_x0, dy0), f"C: [NVMe] ({c_pct}%)", fill=c_white, font=f_small, anchor="la")
+            draw.text((d_x1, dy0), f"{stats.get('disk_c_used', 765)}GB", fill=c_amber, font=f_val, anchor="ra")
+            c_bar_y0 = dy0 + int(15*scale)
+            c_bar_y1 = c_bar_y0 + int(7*scale)
+            draw.rectangle([d_x0, c_bar_y0, d_x1, c_bar_y1], fill=(15, 23, 42), outline=(30, 41, 59))
+            if c_pct > 0:
+                draw.rectangle([d_x0, c_bar_y0, d_x0 + int((d_x1 - d_x0)*(c_pct/100.0)), c_bar_y1], fill=c_amber)
+
+            # Disco E:
+            e_pct = stats.get("disk_e_pct", 79)
+            ey0 = c_bar_y1 + int(15*scale)
+            draw.text((d_x0, ey0), f"E: [GAMES] ({e_pct}%)", fill=c_white, font=f_small, anchor="la")
+            draw.text((d_x1, ey0), f"{stats.get('disk_e_used', 1470)}GB", fill=c_amber, font=f_val, anchor="ra")
+            e_bar_y0 = ey0 + int(15*scale)
+            e_bar_y1 = e_bar_y0 + int(7*scale)
+            draw.rectangle([d_x0, e_bar_y0, d_x1, e_bar_y1], fill=(15, 23, 42), outline=(30, 41, 59))
+            if e_pct > 0:
+                draw.rectangle([d_x0, e_bar_y0, d_x0 + int((d_x1 - d_x0)*(e_pct/100.0)), e_bar_y1], fill=c_amber)
+
+            # Sub-coluna Direita: Rede & I/O
+            net_x0 = d_x1 + sub_gap
+            net_x1 = c3_x1 - int(16*scale)
+            lines_net = [
+                ("DOWNLOAD:", f"▲ {stats.get('net_down_str', '24.6 MB/s')}"),
+                ("UPLOAD:", f"▼ {stats.get('net_up_str', '3.8 MB/s')}"),
+                ("DISCO LIDO:", stats.get("disk_read_str", "18.5 MB/s")),
+                ("DISCO ESCRITO:", stats.get("disk_write_str", "3.2 MB/s")),
             ]
-            for lbl, v in lines_mem:
-                draw.text((c1_x0 + int(14*scale), m_ly), lbl, fill=c_slate, font=f_micro)
-                draw.text((c1_x1 - int(14*scale), m_ly), v, fill=c_slate, font=f_micro, anchor="ra")
-                m_ly += int(14 * scale)
-
-            # 3. ARMAZENAMENTO & REDE
-            c2_x0, c2_x1 = cols[2]
-            self._draw_hud_bracket_card(draw, c2_x0, content_y0, c2_x1, content_y1, scale, fill=(8, 14, 22), border=(245, 158, 11), bracket_len=14)
-            draw.text((c2_x0 + int(12*scale), content_y0 + int(12*scale)), "SYS // ARMAZENAMENTO & REDE", fill=c_amber, font=f_title)
-
-            c_pct = stats.get("disk_c_pct", 84)
-            draw.text((c2_x0 + int(14*scale), content_y0 + int(40*scale)), f"DISCO C: [NVMe] ({c_pct}%)", fill=c_white, font=f_small)
-            draw.text((c2_x1 - int(14*scale), content_y0 + int(40*scale)), f"{stats.get('disk_c_used', 780)} / {stats.get('disk_c_total', 930)} GB", fill=c_amber, font=f_val, anchor="ra")
-
-            d_bx0 = c2_x0 + int(14*scale)
-            d_bx1 = c2_x1 - int(14*scale)
-            d_by0 = content_y0 + int(56*scale)
-            d_by1 = d_by0 + int(6*scale)
-            draw.rectangle([d_bx0, d_by0, d_bx1, d_by1], fill=(15, 23, 42), outline=(30, 41, 59))
-            dfill_w = int((d_bx1 - d_bx0) * (c_pct / 100.0))
-            if dfill_w > 0:
-                draw.rectangle([d_bx0, d_by0, d_bx0 + dfill_w, d_by1], fill=c_amber)
-
-            e_pct = stats.get("disk_e_pct", 83)
-            draw.text((c2_x0 + int(14*scale), content_y0 + int(80*scale)), f"DISCO E: [GAMES] ({e_pct}%)", fill=c_white, font=f_small)
-            draw.text((c2_x1 - int(14*scale), content_y0 + int(80*scale)), f"{stats.get('disk_e_used', 1540)} / {stats.get('disk_e_total', 1860)} GB", fill=c_amber, font=f_val, anchor="ra")
-
-            e_by0 = content_y0 + int(96*scale)
-            e_by1 = e_by0 + int(6*scale)
-            draw.rectangle([d_bx0, e_by0, d_bx1, e_by1], fill=(15, 23, 42), outline=(30, 41, 59))
-            efill_w = int((d_bx1 - d_bx0) * (e_pct / 100.0))
-            if efill_w > 0:
-                draw.rectangle([d_bx0, e_by0, d_bx0 + efill_w, e_by1], fill=c_amber)
-
-            d_ly = content_y0 + int(126 * scale)
-            lines_io = [
-                ("DISCO LEITURA:", stats.get("disk_read_str", "14.2 MB/s")),
-                ("DISCO ESCRITA:", stats.get("disk_write_str", "2.8 MB/s")),
-                ("DOWNLOAD (DL):", f"▲ {stats.get('net_down_str', '18.4 MB/s')}"),
-                ("UPLOAD (UL):", f"▼ {stats.get('net_up_str', '2.1 MB/s')}"),
-            ]
-            for lbl, v in lines_io:
-                draw.text((c2_x0 + int(14*scale), d_ly), lbl, fill=c_slate, font=f_small)
+            ny = dy0
+            n_step = max(16, int((c3_y1 - c3_y0 - 52*scale) / len(lines_net)))
+            for lbl, v in lines_net:
                 col_v = c_emerald if "▲" in v else (c_cyan if "▼" in v else c_white)
-                draw.text((c2_x1 - int(14*scale), d_ly), v, fill=col_v, font=f_val, anchor="ra")
-                d_ly += int(16 * scale)
-
-            # 4. PLACA GRÁFICA (GPU)
-            c3_x0, c3_x1 = cols[3]
-            self._draw_hud_bracket_card(draw, c3_x0, content_y0, c3_x1, content_y1, scale, fill=(8, 14, 22), border=(16, 185, 129), bracket_len=14)
-            draw.text((c3_x0 + int(12*scale), content_y0 + int(12*scale)), f"SYS // {stats.get('gpu_name', 'GEFORCE RTX')}", fill=c_emerald, font=f_title)
-
-            gpu_u = stats.get("gpu_usage", 74)
-            gpu_t = stats.get("gpu_temp", 67)
-            gpu_t_col = c_red if gpu_t >= 75 else (c_amber if gpu_t >= 60 else c_emerald)
-            cx3 = (c3_x0 + c3_x1) // 2
-            cy3 = content_y0 + int(90 * scale)
-            self._draw_circular_hud_meter(draw, cx3, cy3, 48, gpu_u, scale, label="GPU LOAD", val_str=f"{gpu_u}%", temp_str=f"{gpu_t}°C", primary_color=c_emerald, temp_color=gpu_t_col)
-
-            lines_gpu = [
-                ("FREQUÊNCIA:", f"{stats.get('gpu_clock', 2640)} MHz"),
-                ("POTÊNCIA:", f"~{stats.get('gpu_power', 185)} W"),
-                ("VENTOINHA:", f"{stats.get('gpu_fan', 1650)} RPM"),
-                ("DIRECTX / RT:", "DX12 ULTIMATE // ON"),
-            ]
-            gly = cy3 + int(68 * scale)
-            for lbl, v in lines_gpu:
-                draw.text((c3_x0 + int(14*scale), gly), lbl, fill=c_slate, font=f_small)
-                draw.text((c3_x1 - int(14*scale), gly), v, fill=c_white, font=f_val, anchor="ra")
-                gly += int(16 * scale)
+                draw.text((net_x0, ny), lbl, fill=c_slate, font=f_micro, anchor="la")
+                draw.text((net_x1, ny), v, fill=col_v, font=f_val, anchor="ra")
+                ny += n_step
 
         # Barra Inferior de Atalhos HUD
         bot_y0 = height - bot_h - int(4 * scale)
         bot_y1 = height - int(4 * scale)
         self._draw_hud_bracket_card(draw, int(8*scale), bot_y0, width - int(8*scale), bot_y1, scale, fill=(6, 12, 18), border=(0, 229, 255), bracket_len=6)
 
-        draw.text((int(20 * scale), (bot_y0 + bot_y1)//2), "💡 ATALHOS: [F11] TELA CHEIA 2º ECRÃ   |   [T] ALTERNAR TRANSPARÊNCIA HUD   |   [ESC] RESTAURAR JANELA", fill="#94a3b8", font=f_micro, anchor="lm")
-        draw.text((width - int(20 * scale), (bot_y0 + bot_y1)//2), f"FPS: {stats.get('fps', 60)}  //  UPTIME: {stats.get('uptime', '3h 24m')}", fill=c_cyan, font=f_micro, anchor="rm")
+        mid_bot_y = (bot_y0 + bot_y1) // 2
+        draw.text((int(20 * scale), mid_bot_y), "💡 ATALHOS: [F11] TELA CHEIA 2º ECRÃ   |   [T] ALTERNAR TRANSPARÊNCIA HUD   |   [ESC] RESTAURAR JANELA", fill="#94a3b8", font=f_micro, anchor="lm")
+        draw.text((width - int(20 * scale), mid_bot_y), f"FPS: {stats.get('fps', 60)}  //  UPTIME: {stats.get('uptime', '2h 45m')}", fill=c_cyan, font=f_micro, anchor="rm")
 
         return img
 
