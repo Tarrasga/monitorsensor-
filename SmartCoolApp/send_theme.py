@@ -85,11 +85,39 @@ if dev is None:
     print("[ERRO] Ecrã não encontrado!")
     sys.exit(1)
 
+# 1. Drenar qualquer pacote ou confirmação CSW pendente de transmissões anteriores
+for _ in range(5):
+    try:
+        dev.read(EP_IN, 64, timeout=100)
+    except Exception:
+        break
+
+try:
+    dev.clear_halt(EP_OUT)
+except Exception:
+    pass
+
+try:
+    dev.clear_halt(EP_IN)
+except Exception:
+    pass
+
+# 2. Executar reset de barramento suave se necessário para garantir sincronismo
+try:
+    dev.reset()
+    time.sleep(0.5)
+    dev = libusb_package.find(idVendor=VID, idProduct=PID)
+except Exception:
+    pass
+
 try:
     dev.set_configuration()
+except Exception:
+    pass
+
+try:
     dev.clear_halt(EP_OUT)
     dev.clear_halt(EP_IN)
-    dev.read(EP_IN, 64, timeout=100)
 except Exception:
     pass
 
@@ -125,17 +153,44 @@ cbw_cmd[14] = ((320 - 1) >> 8) & 0xFF
 
 cbw = cbw_header + bytes([16]) + bytes(cbw_cmd)
 
-dev.write(EP_OUT, cbw, timeout=1000)
-dev.write(EP_OUT, rgb565_be, timeout=2000)
+# 3. Envio seguro por blocos com confirmação CSW
+success = False
+for attempt in range(2):
+    try:
+        # Enviar CBW
+        dev.write(EP_OUT, cbw, timeout=2000)
 
-csw = dev.read(EP_IN, 13, timeout=1000)
-print(f" -> CSW Confirmado ({len(csw)} bytes): {bytes(csw)}")
+        # Enviar RGB565 em blocos de 512 bytes para garantir compatibilidade com o buffer do controlador
+        chunk_size = 512
+        for i in range(0, len(rgb565_be), chunk_size):
+            dev.write(EP_OUT, rgb565_be[i:i + chunk_size], timeout=2000)
+
+        # Ler confirmação CSW (13 bytes) do Endpoint 0x81
+        csw = dev.read(EP_IN, 13, timeout=3000)
+        print(f" -> CSW Confirmado ({len(csw)} bytes): {bytes(csw)}")
+        success = True
+        break
+    except Exception as e:
+        if attempt == 0:
+            print(f" -> A recuperar de timeout anterior ({e})... a tentar novamente...")
+            try:
+                dev.clear_halt(EP_OUT)
+                dev.clear_halt(EP_IN)
+                dev.read(EP_IN, 64, timeout=200)
+            except Exception:
+                pass
+            time.sleep(0.3)
+        else:
+            print(f"[ERRO]: Falha na comunicação USB: {e}")
 
 try:
     usb.util.dispose_resources(dev)
 except Exception:
     pass
 
-print("\n" + "=" * 60)
-print("[SUCESSO TOTAL!] O ecrã físico foi atualizado com sucesso!")
-print("=" * 60)
+if success:
+    print("\n" + "=" * 60)
+    print("[SUCESSO TOTAL!] O ecrã físico foi atualizado com sucesso!")
+    print("=" * 60)
+else:
+    sys.exit(1)

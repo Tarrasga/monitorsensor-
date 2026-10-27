@@ -237,10 +237,12 @@ class SmartCoolDriver:
 
         try:
             # 1. Enviar CBW para o Endpoint 0x01
-            self.usb_dev.write(self.EP_OUT, cbw, timeout=1500)
+            self.usb_dev.write(self.EP_OUT, cbw, timeout=2000)
 
-            # 2. Enviar dados (payload RGB565 com timeout de 3500ms para evitar stalls)
-            self.usb_dev.write(self.EP_OUT, payload, timeout=3500)
+            # 2. Enviar dados (payload RGB565 em blocos de 512 bytes para garantir estabilidade)
+            chunk_size = 512
+            for i in range(0, len(payload), chunk_size):
+                self.usb_dev.write(self.EP_OUT, payload[i:i + chunk_size], timeout=2000)
 
             # 3. Ler o CSW (13 bytes) do Endpoint 0x81 (timeout de 3000ms para dar tempo ao LCD blit)
             self.usb_dev.read(self.EP_IN, 13, timeout=3000)
