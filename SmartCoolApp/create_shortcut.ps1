@@ -1,4 +1,4 @@
-﻿
+
 $ws = New-Object -ComObject WScript.Shell
 
 $destList = @(
@@ -8,12 +8,20 @@ $destList = @(
 
 foreach ($d in $destList) {
     if (Test-Path -LiteralPath $d) {
-        $lnkPath = Join-Path $d "SmartCool Monitor.lnk"
+        # 1. Remover atalho antigo com nome desatualizado se existir
+        $oldLnk = Join-Path $d "SmartCool Monitor.lnk"
+        if (Test-Path -LiteralPath $oldLnk) {
+            Remove-Item -LiteralPath $oldLnk -Force -ErrorAction SilentlyContinue
+            Write-Output "[OK] Atalho antigo removido: $oldLnk"
+        }
+
+        # 2. Criar novo atalho oficial Monster Telemetria
+        $lnkPath = Join-Path $d "Monster Telemetria.lnk"
         $s = $ws.CreateShortcut($lnkPath)
-        $s.TargetPath = "E:\Gravi\INICIAR_APP_SMARTCOOL.bat"
+        $s.TargetPath = "E:\Gravi\INICIAR_MONSTER_TELEMETRIA.bat"
         $s.WorkingDirectory = "E:\Gravi"
         $s.IconLocation = "E:\Gravi\SmartCoolApp\assets\thermometer.ico,0"
-        $s.Description = "SmartCool Monitor // Master Telemetry [TARRASGA]"
+        $s.Description = "Monster Telemetria // 2º Ecrã, USB & Wi-Fi [TARRASGA]"
         $s.Save()
         Write-Output "[OK] Atalho criado com sucesso em: $lnkPath"
     } else {

@@ -1,3 +1,3 @@
 Set oWS = CreateObject("WScript.Shell")
 oWS.CurrentDirectory = "E:\Gravi"
-oWS.Run "cmd.exe /c ""E:\Gravi\INICIAR_APP_SMARTCOOL.bat""", 0, False
+oWS.Run "cmd.exe /c ""E:\Gravi\INICIAR_MONSTER_TELEMETRIA.bat""", 0, False

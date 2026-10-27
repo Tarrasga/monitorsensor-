@@ -1,9 +1,9 @@
 @echo off
-title SmartCool 3.5 Monitor - Inicializador
+title Monster Telemetria - Inicializador
 cd /d "%~dp0"
 
 echo ======================================================
-echo    SMARTCOOL 3.5 MONITOR // TARRASGA EDITION
+echo    MONSTER TELEMETRIA // TARRASGA EDITION
 echo ======================================================
 echo.
 
@@ -23,7 +23,7 @@ goto NO_PYTHON
 :RUN_PYTHON
 echo [1/2] A verificar dependencias...
 python -m pip install -r requirements.txt --quiet --no-warn-script-location
-echo [2/2] A iniciar o SmartCool Monitor...
+echo [2/2] A iniciar o Monster Telemetria...
 python app.py
 if errorlevel 1 (
     echo.
@@ -35,7 +35,7 @@ goto END
 :RUN_PY
 echo [1/2] A verificar dependencias...
 py -m pip install -r requirements.txt --quiet --no-warn-script-location
-echo [2/2] A iniciar o SmartCool Monitor...
+echo [2/2] A iniciar o Monster Telemetria...
 py app.py
 if errorlevel 1 (
     echo.
@@ -66,7 +66,7 @@ exit /b 1
 :END
 echo.
 echo ======================================================
-echo    SmartCool Monitor terminado.
+echo    Monster Telemetria terminado.
 echo ======================================================
 pause
 

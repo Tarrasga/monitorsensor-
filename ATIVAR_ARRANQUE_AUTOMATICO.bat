@@ -11,6 +11,6 @@ python setup_startup.py
 
 echo.
 echo ======================================================
-echo  Concluido! O SmartCool vai iniciar sempre que ligar o PC.
+echo  Concluido! O Monster Telemetria vai iniciar sempre que ligar o PC.
 echo ======================================================
 pause

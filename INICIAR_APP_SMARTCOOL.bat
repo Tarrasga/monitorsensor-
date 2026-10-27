@@ -1,3 +1,2 @@
 @echo off
-cd /d "%~dp0SmartCoolApp"
-call iniciar.bat
+call "%~dp0INICIAR_MONSTER_TELEMETRIA.bat"

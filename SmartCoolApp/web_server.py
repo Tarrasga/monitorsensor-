@@ -40,7 +40,7 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#07090e">
-    <title>SmartCool // Master Telemetry</title>
+    <title>Monster Telemetria // Live HUD</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/png" href="/icon.png">
     <link rel="apple-touch-icon" href="/icon.png">
@@ -343,7 +343,7 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
         <button id="btn-prev-theme" class="theme-nav-arrow arrow-left" onclick="switchTheme('prev')" title="Tema Anterior">‹</button>
         <button id="btn-next-theme" class="theme-nav-arrow arrow-right" onclick="switchTheme('next')" title="Próximo Tema">›</button>
 
-        <img id="dashboard-stream" src="/frame.jpg" alt="SmartCool Telemetry Dashboard">
+        <img id="dashboard-stream" src="/frame.jpg" alt="Monster Telemetria Dashboard">
         <div id="rotate-tip">🔄 Vira o telemóvel na horizontal (deitado) para ver em grande</div>
 
         <div class="controls-bar" id="controls-bar">
@@ -649,8 +649,8 @@ HTML_PAGE_TEMPLATE = """<!DOCTYPE html>
 """
 
 PWA_MANIFEST = {
-    "name": "SmartCool Master Telemetry",
-    "short_name": "SmartCool",
+    "name": "Monster Telemetria",
+    "short_name": "Monster",
     "start_url": "/",
     "display": "fullscreen",
     "orientation": "landscape",
@@ -936,7 +936,7 @@ class TelemetryWebServer:
             init_img = Image.new("RGB", (1280, 720), "#07090e")
             draw = ImageDraw.Draw(init_img)
             draw.rectangle([40, 40, 1240, 680], outline="#1e293b", width=2)
-            draw.text((640, 320), "SMARTCOOL MASTER TELEMETRY", fill="#10b981", anchor="mm")
+            draw.text((640, 320), "MONSTER TELEMETRIA // LIVE HUD", fill="#10b981", anchor="mm")
             draw.text((640, 370), "A ligar a telemetria do PC em tempo real...", fill="#94a3b8", anchor="mm")
             buf = io.BytesIO()
             init_img.save(buf, format="JPEG", quality=85)

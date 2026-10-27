@@ -56,14 +56,14 @@ def get_current_monitor_rect(hwnd):
 class SmartCoolApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("SmartCool Monitor // Master Telemetry [TARRASGA]")
+        self.root.title("Monster Telemetria // 2º Ecrã, USB & Wi-Fi [TARRASGA]")
         self.root.geometry("1120x740")
         self.root.minsize(880, 600)
         self.root.configure(bg="#0a0d14")
 
         # Configurar Ícone Oficial na Barra de Tarefas e Título da Janela (Termómetro)
         try:
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Tarrasga.SmartCool.Monitor.1")
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Tarrasga.MonsterTelemetria.1")
         except Exception:
             pass
 
@@ -279,7 +279,7 @@ class SmartCoolApp:
 
         self.lbl_title = tk.Label(
             self.header_frame,
-            text="MASTER TELEMETRY // SMARTCOOL, 2º ECRÃ & WI-FI",
+            text="MONSTER TELEMETRIA // 2º ECRÃ, USB & WI-FI",
             font=("Segoe UI", 12, "bold"),
             fg="#e2e8f0",
             bg="#0d111a"
