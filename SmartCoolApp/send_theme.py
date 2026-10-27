@@ -65,6 +65,10 @@ elif target in ("508", "peugeot", "peugeot508", "508sw", "icockpit"):
     image_path = os.path.join(assets_dir, "preview_theme_peugeot_508_usb.png")
     if not os.path.exists(image_path):
         image_path = os.path.join(assets_dir, "preview_theme_peugeot_508.png")
+elif target in ("mixer", "dj", "mesa", "equalizer", "eq", "musica", "audio", "studio"):
+    image_path = os.path.join(assets_dir, "preview_theme_mixer_usb.png")
+    if not os.path.exists(image_path):
+        image_path = os.path.join(assets_dir, "preview_theme_mixer.png")
 else:
     image_path = target
 

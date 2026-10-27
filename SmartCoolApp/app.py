@@ -160,6 +160,13 @@ class SmartCoolApp:
                 "primary": "#00d2ff",
                 "dim": "#081b24",
                 "accent": "#d4ff00"
+            },
+            "Mesa de Mistura DJ (Studio Audio Equalizer)": {
+                "file": os.path.join(self.assets_dir, "preview_theme_mixer.png"),
+                "layout": "DJ_MIXER",
+                "primary": "#10b981",
+                "dim": "#081812",
+                "accent": "#00d2ff"
             }
         }
 
@@ -745,7 +752,7 @@ class SmartCoolApp:
                 t_info = self.themes.get(name, {})
                 layout = t_info.get("layout", "ALL_SENSORS")
                 w_frame = self.render_frame(self.last_stats, width=1280, height=720) if layout in (
-                    "ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508"
+                    "ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER"
                 ) else self.render_frame(self.last_stats, width=480, height=320)
                 self.web_server.update_frame(w_frame, self.last_stats)
             return name
@@ -1090,6 +1097,50 @@ class SmartCoolApp:
         draw.line([(bx, by), (tx, ty)], fill=color, width=width)
         draw.ellipse([cx - cap_r, cy - cap_r, cx + cap_r, cy + cap_r], fill="#1e293b", outline="#cbd5e1", width=2)
         draw.ellipse([cx - cap_r//2, cy - cap_r//2, cx + cap_r//2, cy + cap_r//2], fill=color)
+
+    def _draw_led_vu_meter(self, draw, x, y, width, height, level_ratio, num_segments=16, scale=1.0):
+        """Desenha uma coluna de LEDs estilo mesa de mistura (Equalizador / VU Meter)."""
+        level_ratio = min(1.0, max(0.0, level_ratio))
+        gap = max(1, int(2 * scale))
+        seg_h = (height - (num_segments - 1) * gap) / float(num_segments)
+
+        c_green = "#10b981"
+        c_amber = "#fbbf24"
+        c_red = "#ef4444"
+        d_green = "#08231a"
+        d_amber = "#241806"
+        d_red = "#260909"
+
+        for i in range(num_segments):
+            seg_ratio = (i + 1) / float(num_segments)
+            is_lit = (seg_ratio <= level_ratio)
+            if seg_ratio <= 0.60:
+                color = c_green if is_lit else d_green
+            elif seg_ratio <= 0.82:
+                color = c_amber if is_lit else d_amber
+            else:
+                color = c_red if is_lit else d_red
+
+            sy1 = y + height - int(i * (seg_h + gap))
+            sy0 = sy1 - int(seg_h)
+            draw.rectangle([x, sy0, x + width, sy1], fill=color)
+
+    def _draw_fader(self, draw, track_x, track_y, track_h, level_ratio, scale=1.0):
+        """Desenha a ranhura do fader e o manípulo metálico ajustado ao nível da mesa de mistura."""
+        level_ratio = min(1.0, max(0.0, level_ratio))
+        slot_w = max(2, int(3 * scale))
+        draw.rectangle([track_x - slot_w // 2, track_y, track_x + slot_w // 2, track_y + track_h], fill="#0a0e14", outline="#1e293b", width=1)
+
+        knob_y = track_y + track_h - int(level_ratio * track_h)
+        kw = int(22 * scale)
+        kh = int(12 * scale)
+        kx0 = track_x - kw // 2
+        kx1 = track_x + kw // 2
+        ky0 = knob_y - kh // 2
+        ky1 = knob_y + kh // 2
+
+        draw.rectangle([kx0, ky0, kx1, ky1], fill="#334155", outline="#64748b", width=1)
+        draw.line([(kx0 + int(3*scale), knob_y), (kx1 - int(3*scale), knob_y)], fill="#f8fafc", width=max(1, int(1.5*scale)))
 
     def render_speedometer_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'Velocímetros de Carro' em qualquer resolução (HD ou 480x320)."""
@@ -2126,6 +2177,182 @@ class SmartCoolApp:
 
         return img
 
+    def render_mixer_view(self, stats, width=1280, height=720):
+        """Renderiza o tema 'Mesa de Mistura DJ' (Studio Audio Equalizer)."""
+        scale = height / 320.0
+        is_compact = (width <= 640)
+
+        # 1. Carregar Wallpaper de Mesa de Mistura
+        bg_path = os.path.join(self.assets_dir, "dj_mixer.jpg")
+        if os.path.exists(bg_path):
+            base_img = Image.open(bg_path).convert("RGB")
+            base_ratio = base_img.width / float(base_img.height)
+            target_ratio = width / float(height)
+            if base_ratio > target_ratio:
+                nh = height
+                nw = int(height * base_ratio)
+                base_resized = base_img.resize((nw, nh), Image.Resampling.LANCZOS)
+                x_off = (nw - width) // 2
+                img = base_resized.crop((x_off, 0, x_off + width, height))
+            else:
+                nw = width
+                nh = int(width / base_ratio)
+                base_resized = base_img.resize((nw, nh), Image.Resampling.LANCZOS)
+                y_off = (nh - height) // 2
+                img = base_resized.crop((0, y_off, width, y_off + height))
+        else:
+            img = Image.new("RGB", (width, height), "#080b10")
+
+        # 2. Camada Transparência HUD Mesa de Mistura
+        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        d_ov = ImageDraw.Draw(overlay)
+
+        bar_h = int(26 * scale)
+        d_ov.rectangle([0, 0, width, bar_h], fill=(8, 12, 18, 235))
+
+        bot_h = int(24 * scale)
+        d_ov.rectangle([0, height - bot_h, width, height], fill=(8, 12, 18, 240))
+
+        num_channels = 6
+        pad_x = int(8 * scale)
+        usable_w = width - (2 * pad_x)
+        col_w = usable_w / float(num_channels)
+        content_y0 = bar_h + int(6 * scale)
+        content_y1 = height - bot_h - int(6 * scale)
+
+        for i in range(num_channels):
+            cx0 = int(pad_x + i * col_w) + int(2 * scale)
+            cx1 = int(pad_x + (i + 1) * col_w) - int(2 * scale)
+            d_ov.rectangle([cx0, content_y0, cx1, content_y1], fill=(10, 15, 22, 215), outline=(30, 41, 59, 180), width=1)
+
+        img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+        draw = ImageDraw.Draw(img)
+
+        f_title = self._get_font("ui", 10, scale, bold=True)
+        f_clock = self._get_font("mono", 11, scale, bold=True)
+        f_ch_title = self._get_font("ui", 8.5, scale, bold=True)
+        f_val_giant = self._get_font("mono", 13, scale, bold=True)
+        f_val_med = self._get_font("ui", 9.5, scale, bold=True)
+        f_small = self._get_font("ui", 8.0, scale, bold=False)
+        f_badge = self._get_font("mono", 8.5, scale, bold=True)
+
+        c_cyan = "#00d2ff"
+        c_green = "#10b981"
+        c_amber = "#fbbf24"
+        c_white = "#f8fafc"
+        c_slate = "#94a3b8"
+
+        # Barra Superior
+        draw.rectangle([0, 0, int(width * 0.35), int(2.5 * scale)], fill=c_cyan)
+        draw.rectangle([int(width * 0.35), 0, int(width * 0.70), int(2.5 * scale)], fill=c_green)
+        draw.rectangle([int(width * 0.70), 0, width, int(2.5 * scale)], fill=c_amber)
+
+        draw.text((int(12 * scale), int(6 * scale)), "STUDIO MIXER // MASTER TELEMETRY EQUALIZER", fill=c_white, font=f_title)
+        if not is_compact:
+            draw.text((int(width * 0.52), int(7 * scale)), "24-BIT / 96kHz LIVE BUS", fill=c_slate, font=f_small)
+        draw.text((width - int(100 * scale), int(6 * scale)), stats.get("time", "00:00"), fill=c_amber, font=f_clock)
+
+        channels_data = [
+            {
+                "name": "CH 1: CPU",
+                "stat1": f"{stats.get('cpu_clock', 4.80):.2f} GHz",
+                "stat2": f"{stats.get('cpu_temp', 47)}°C",
+                "val_str": f"{stats.get('cpu_usage', 0)}%",
+                "ratio": stats.get("cpu_usage", 0) / 100.0,
+                "foot": f"{stats.get('cpu_fan', 0)} RPM",
+                "color": c_cyan
+            },
+            {
+                "name": "CH 2: GPU",
+                "stat1": "RTX 4070Ti",
+                "stat2": f"{stats.get('gpu_temp', 50)}°C",
+                "val_str": f"{stats.get('gpu_usage', 0)}%",
+                "ratio": stats.get("gpu_usage", 0) / 100.0,
+                "foot": f"{stats.get('gpu_fan', 0)} RPM",
+                "color": c_green
+            },
+            {
+                "name": "CH 3: RAM",
+                "stat1": f"{stats.get('ram_used_gb', 0)} GB",
+                "stat2": "DDR5",
+                "val_str": f"{stats.get('ram_usage', 0)}%",
+                "ratio": stats.get("ram_usage", 0) / 100.0,
+                "foot": "MEMORY",
+                "color": c_amber
+            },
+            {
+                "name": "CH 4: SSD",
+                "stat1": f"C:{stats.get('disk_c_free_gb', 0)}G",
+                "stat2": f"E:{stats.get('disk_e_free_gb', 0)}G",
+                "val_str": f"{stats.get('disk_c_usage', 56)}%",
+                "ratio": stats.get("disk_c_usage", 56) / 100.0,
+                "foot": "NVMe M.2",
+                "color": c_cyan
+            },
+            {
+                "name": "CH 5: NET",
+                "stat1": f"DL {stats.get('net_down_str', '0M')}",
+                "stat2": f"UL {stats.get('net_up_str', '0M')}",
+                "val_str": "FLOW",
+                "ratio": min(1.0, stats.get("net_down_kb", 8400) / 15000.0),
+                "foot": "GbE LAN",
+                "color": c_green
+            },
+            {
+                "name": "CH 6: MAIN",
+                "stat1": f"SYS {stats.get('sys_temp', 38)}°C",
+                "stat2": "OUT 0dB",
+                "val_str": "MASTER",
+                "ratio": max(stats.get("cpu_usage", 0), stats.get("gpu_usage", 0)) / 100.0,
+                "foot": f"{stats.get('chassis_fan', 1100)} RPM",
+                "color": c_amber
+            }
+        ]
+
+        for i, ch in enumerate(channels_data):
+            cx0 = int(pad_x + i * col_w) + int(2 * scale)
+            cx1 = int(pad_x + (i + 1) * col_w) - int(2 * scale)
+            mid_x = (cx0 + cx1) // 2
+
+            head_y = content_y0 + int(4 * scale)
+            head_h = int(18 * scale)
+            draw.rectangle([cx0 + int(4*scale), head_y, cx1 - int(4*scale), head_y + head_h], fill="#0e1726", outline="#1e293b", width=1)
+            draw.text((mid_x, head_y + head_h // 2), ch["name"], fill=ch["color"], font=f_ch_title, anchor="mm")
+
+            t_y = head_y + head_h + int(4 * scale)
+            draw.text((mid_x, t_y), ch["stat1"], fill=c_white, font=f_val_med, anchor="mt")
+            draw.text((mid_x, t_y + int(14 * scale)), ch["stat2"], fill=ch["color"], font=f_small, anchor="mt")
+
+            meter_y = t_y + int(30 * scale)
+            meter_h = content_y1 - meter_y - int(40 * scale)
+
+            if not is_compact:
+                vu_w = int(14 * scale)
+                vu_x1 = mid_x - int(24 * scale)
+                vu_x2 = vu_x1 + vu_w + int(3 * scale)
+                self._draw_led_vu_meter(draw, vu_x1, meter_y, vu_w, meter_h, ch["ratio"], num_segments=18, scale=scale)
+                r_ratio = max(0.0, min(1.0, ch["ratio"] * (0.92 if i % 2 == 0 else 1.05)))
+                self._draw_led_vu_meter(draw, vu_x2, meter_y, vu_w, meter_h, r_ratio, num_segments=18, scale=scale)
+
+                fader_x = mid_x + int(24 * scale)
+                self._draw_fader(draw, fader_x, meter_y, meter_h, ch["ratio"], scale=scale)
+            else:
+                vu_w = int(22 * scale)
+                vu_x = mid_x - vu_w // 2
+                self._draw_led_vu_meter(draw, vu_x, meter_y, vu_w, meter_h, ch["ratio"], num_segments=14, scale=scale)
+
+            val_y = content_y1 - int(34 * scale)
+            draw.text((mid_x, val_y), ch["val_str"], fill=c_white, font=f_val_giant, anchor="mm")
+
+            foot_y = content_y1 - int(16 * scale)
+            draw.text((mid_x, foot_y), ch["foot"], fill=c_slate, font=f_small, anchor="mm")
+
+        bot_text_y = height - bot_h + int(4 * scale)
+        draw.text((int(14 * scale), bot_text_y), "● REC [ACTIVE]   ► PLAY [ON]   SOLO [CUE]   CROSSFADER [CH 1 <---> CH 2]", fill=c_slate, font=f_small)
+        draw.text((width - int(14 * scale), bot_text_y), f"BPM: {int(stats.get('cpu_clock', 4.80) * 26.5)} // DSP LOCK", fill=c_green, font=f_badge, anchor="rt")
+
+        return img
+
     def render_frame(self, stats, width=480, height=320):
         """Renderiza o frame solicitado na resolução desejada."""
         theme_info = self.themes.get(self.current_theme_name, self.themes["Master Telemetry (Todos os Sensores)"])
@@ -2147,6 +2374,8 @@ class SmartCoolApp:
             return self.render_pubg_view(stats, width, height)
         elif layout == "PEUGEOT_508":
             return self.render_peugeot_508_view(stats, width, height)
+        elif layout == "DJ_MIXER":
+            return self.render_mixer_view(stats, width, height)
 
         # Temas Legados (480x320)
         if os.path.exists(self.bg_path):
@@ -2225,7 +2454,7 @@ class SmartCoolApp:
         theme_info = self.themes.get(self.current_theme_name, {})
         layout = theme_info.get("layout", "ALL_SENSORS")
 
-        if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508"):
+        if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER"):
             display_frame = self.render_frame(stats, width=cw, height=ch)
             self.preview_image = ImageTk.PhotoImage(display_frame)
             self.canvas.delete("all")
@@ -2244,7 +2473,7 @@ class SmartCoolApp:
 
         # Se a transmissão contínua estiver parada, envia o frame estático inicial para o servidor Wi-Fi
         if not self.running and self.wifi_enabled_var.get() and self.web_server.is_running:
-            wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508") else display_frame
+            wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER") else display_frame
             self.web_server.update_frame(wifi_frame, stats)
 
     def update_preview(self):
@@ -2279,7 +2508,7 @@ class SmartCoolApp:
                     try:
                         theme_info = self.themes.get(self.current_theme_name, {})
                         layout = theme_info.get("layout", "ALL_SENSORS")
-                        wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508") else usb_frame
+                        wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER") else usb_frame
                         self.web_server.update_frame(wifi_frame, stats)
                     except Exception as we:
                         print(f"[App] Erro na frame Wi-Fi 720p: {we}")
