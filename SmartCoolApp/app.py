@@ -61,8 +61,26 @@ class SmartCoolApp:
         self.root.minsize(880, 600)
         self.root.configure(bg="#0a0d14")
 
+        # Configurar Ícone Oficial na Barra de Tarefas e Título da Janela (Termómetro)
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Tarrasga.SmartCool.Monitor.1")
+        except Exception:
+            pass
+
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.assets_dir = os.path.join(self.base_dir, "assets")
+
+        ico_path = os.path.join(self.assets_dir, "thermometer.ico")
+        if os.path.exists(ico_path):
+            try:
+                self.root.iconbitmap(ico_path)
+            except Exception:
+                pass
+            try:
+                self._app_icon_img = ImageTk.PhotoImage(file=ico_path)
+                self.root.iconphoto(True, self._app_icon_img)
+            except Exception:
+                pass
 
         # Catálogo de Temas Integrados
         self.themes = {
