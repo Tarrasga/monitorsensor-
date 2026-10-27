@@ -61,6 +61,10 @@ elif target in ("pubg", "battlegrounds", "erangel"):
     image_path = os.path.join(assets_dir, "preview_theme_pubg_usb.png")
     if not os.path.exists(image_path):
         image_path = os.path.join(assets_dir, "preview_theme_pubg.png")
+elif target in ("508", "peugeot", "peugeot508", "508sw", "icockpit"):
+    image_path = os.path.join(assets_dir, "preview_theme_peugeot_508_usb.png")
+    if not os.path.exists(image_path):
+        image_path = os.path.join(assets_dir, "preview_theme_peugeot_508.png")
 else:
     image_path = target
 

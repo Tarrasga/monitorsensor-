@@ -135,6 +135,13 @@ class SmartCoolApp:
                 "primary": "#facc15",
                 "dim": "#1a1608",
                 "accent": "#ef4444"
+            },
+            "Peugeot 508 SW (Digital i-Cockpit GT)": {
+                "file": os.path.join(self.assets_dir, "preview_theme_peugeot_508.png"),
+                "layout": "PEUGEOT_508",
+                "primary": "#00d2ff",
+                "dim": "#081b24",
+                "accent": "#d4ff00"
             }
         }
 
@@ -171,6 +178,10 @@ class SmartCoolApp:
         # Servidor Web Wi-Fi para Telemóvel / Tablet
         self.wifi_enabled_var = tk.BooleanVar(value=True)
         self.web_server = TelemetryWebServer(port=8080)
+        self.web_server.set_theme_callbacks(
+            get_themes_fn=self._get_themes_catalog,
+            change_theme_fn=self._handle_remote_theme_change
+        )
         self.web_server.start()
 
         # Drivers
@@ -706,6 +717,95 @@ class SmartCoolApp:
             self.btn_fullscreen.config(fg=color, activeforeground=color)
             self.last_theme_switch_time = time.time()
             self.update_preview()
+
+    def set_theme_by_name(self, name):
+        """Muda o tema da aplicação por nome e propaga a alteração."""
+        if name in self.themes:
+            self.theme_combo.set(name)
+            self._on_theme_changed()
+            if self.last_stats and self.web_server and self.web_server.is_running:
+                t_info = self.themes.get(name, {})
+                layout = t_info.get("layout", "ALL_SENSORS")
+                w_frame = self.render_frame(self.last_stats, width=1280, height=720) if layout in (
+                    "ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508"
+                ) else self.render_frame(self.last_stats, width=480, height=320)
+                self.web_server.update_frame(w_frame, self.last_stats)
+            return name
+        return self.current_theme_name
+
+    def cycle_next_theme(self):
+        """Avança para o próximo tema."""
+        theme_keys = list(self.themes.keys())
+        if not theme_keys:
+            return ""
+        try:
+            curr_idx = theme_keys.index(self.current_theme_name)
+            next_idx = (curr_idx + 1) % len(theme_keys)
+        except ValueError:
+            next_idx = 0
+        target = theme_keys[next_idx]
+        return self.set_theme_by_name(target)
+
+    def cycle_prev_theme(self):
+        """Recua para o tema anterior."""
+        theme_keys = list(self.themes.keys())
+        if not theme_keys:
+            return ""
+        try:
+            curr_idx = theme_keys.index(self.current_theme_name)
+            prev_idx = (curr_idx - 1) % len(theme_keys)
+        except ValueError:
+            prev_idx = 0
+        target = theme_keys[prev_idx]
+        return self.set_theme_by_name(target)
+
+    def _get_themes_catalog(self):
+        """Devolve o catálogo de temas disponíveis para o telemóvel / tablet."""
+        return {
+            "current": self.current_theme_name,
+            "themes": [
+                {
+                    "name": k,
+                    "layout": v.get("layout", ""),
+                    "primary": v.get("primary", "#10b981")
+                }
+                for k, v in self.themes.items()
+            ]
+        }
+
+    def _handle_remote_theme_change(self, action, theme_name=None):
+        """Processa pedidos HTTP remotos do telemóvel/tablet de forma thread-safe."""
+        theme_keys = list(self.themes.keys())
+        target_name = self.current_theme_name
+
+        if action == "next" and theme_keys:
+            try:
+                curr_idx = theme_keys.index(self.current_theme_name)
+                target_name = theme_keys[(curr_idx + 1) % len(theme_keys)]
+            except ValueError:
+                target_name = theme_keys[0]
+        elif action == "prev" and theme_keys:
+            try:
+                curr_idx = theme_keys.index(self.current_theme_name)
+                target_name = theme_keys[(curr_idx - 1) % len(theme_keys)]
+            except ValueError:
+                target_name = theme_keys[0]
+        elif action == "set" and theme_name:
+            matched = None
+            for k in self.themes.keys():
+                if k.lower() == theme_name.lower():
+                    matched = k
+                    break
+            if not matched:
+                for k in self.themes.keys():
+                    if theme_name.lower() in k.lower():
+                        matched = k
+                        break
+            if matched:
+                target_name = matched
+
+        self.root.after(0, lambda: self.set_theme_by_name(target_name))
+        return target_name
 
     def _refresh_devices(self):
         devices = SmartCoolDriver.detect_devices()
@@ -1844,6 +1944,170 @@ class SmartCoolApp:
 
         return img
 
+    def render_peugeot_508_view(self, stats, width=1280, height=720):
+        """Renderiza o tema 'Peugeot 508 SW' (Digital i-Cockpit GT Cluster)."""
+        scale = height / 320.0
+        is_compact = (width <= 640)
+
+        # 1. Carregar Wallpaper do Peugeot 508 SW i-Cockpit
+        bg_path = os.path.join(self.assets_dir, "peugeot_508_sw.jpg")
+        if os.path.exists(bg_path):
+            base_img = Image.open(bg_path).convert("RGB")
+            base_ratio = base_img.width / float(base_img.height)
+            target_ratio = width / float(height)
+            if base_ratio > target_ratio:
+                nh = height
+                nw = int(height * base_ratio)
+                base_resized = base_img.resize((nw, nh), Image.Resampling.LANCZOS)
+                x_off = (nw - width) // 2
+                img = base_resized.crop((x_off, 0, x_off + width, height))
+            else:
+                nw = width
+                nh = int(width / base_ratio)
+                base_resized = base_img.resize((nw, nh), Image.Resampling.LANCZOS)
+                y_off = (nh - height) // 2
+                img = base_resized.crop((0, y_off, width, y_off + height))
+        else:
+            img = Image.new("RGB", (width, height), "#06090e")
+
+        # 2. Camada Transparência HUD i-Cockpit
+        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        d_ov = ImageDraw.Draw(overlay)
+
+        bar_h = int(26 * scale)
+        d_ov.rectangle([0, 0, width, bar_h], fill=(6, 9, 14, 230))
+
+        side_w = int(width * (0.33 if not is_compact else 0.40))
+        my0 = bar_h + int(8 * scale)
+        my1 = height - int(60 * scale)
+
+        # Mostrador Esquerdo: Velocímetro Digital (CPU Clock & Load) - Contorno Ciano Peugeot
+        d_ov.rectangle([int(8*scale), my0, side_w, my1], fill=(6, 12, 18, 215), outline=(0, 210, 255, 200), width=max(1, int(1.5*scale)))
+
+        # Mostrador Direito: Conta-Rotações Invertido (GPU VRAM & Load) - Contorno Azul Elétrico
+        rx0 = width - side_w
+        rx1 = width - int(8 * scale)
+        d_ov.rectangle([rx0, my0, rx1, my1], fill=(6, 12, 18, 215), outline=(0, 140, 255, 200), width=max(1, int(1.5*scale)))
+
+        # Barra Inferior: Informações de Condução e Telemetria
+        bot_y0 = my1 + int(6 * scale)
+        bot_y1 = height - int(4 * scale)
+        d_ov.rectangle([int(8*scale), bot_y0, width - int(8*scale), bot_y1], fill=(6, 10, 15, 235), outline=(30, 41, 59, 200), width=1)
+
+        img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+        draw = ImageDraw.Draw(img)
+
+        f_title = self._get_font("ui", 10.5, scale, bold=True)
+        f_clock = self._get_font("mono", 11, scale, bold=True)
+        f_speed = self._get_font("mono", 28, scale, bold=True)
+        f_num_med = self._get_font("ui", 12, scale, bold=True)
+        f_label = self._get_font("ui", 9.5, scale, bold=True)
+        f_val = self._get_font("ui", 9.5, scale, bold=True)
+        f_small = self._get_font("ui", 8.5, scale, bold=False)
+        f_badge = self._get_font("ui", 11, scale, bold=True)
+
+        c_cyan = "#00d2ff"
+        c_blue = "#0088ff"
+        c_lime = "#d4ff00"
+        c_white = "#f8fafc"
+        c_slate = "#94a3b8"
+        c_red = "#ef4444"
+
+        def temp_color(t):
+            if t < 55: return "#10b981"
+            elif t < 75: return c_cyan
+            else: return c_red
+
+        # Faixa Superior Peugeot Sport
+        stripe_h = max(2, int(3 * scale))
+        draw.rectangle([0, 0, width // 2, stripe_h], fill=c_cyan)
+        draw.rectangle([width // 2, 0, width, stripe_h], fill=c_lime)
+
+        draw.text((int(14 * scale), int(6 * scale)), "PEUGEOT 508 SW // DIGITAL i-COCKPIT CLUSTER", fill=c_white, font=f_title)
+        draw.text((width - int(120 * scale), int(6 * scale)), stats.get("time", "00:00"), fill=c_cyan, font=f_clock)
+
+        # Painel Esquerdo: Velocímetro (Velocidade do Processador & Temp Motor)
+        px0 = int(8 * scale)
+        px1 = side_w
+        head_h = int(22 * scale)
+        draw.rectangle([px0, my0, px1, my0 + head_h], fill="#0284c7")
+        draw.text((px0 + int(8*scale), my0 + int(4*scale)), "SPEEDOMETER // CPU CORE i7", fill=c_white, font=f_label)
+
+        clock_val = stats.get("cpu_clock", 4.80)
+        clock_str = f"{clock_val:.2f}"
+        draw.text((px0 + int(14*scale), my0 + head_h + int(8*scale)), clock_str, fill=c_cyan, font=f_speed)
+        draw.text((px0 + int(115*scale), my0 + head_h + int(20*scale)), "GHz", fill=c_slate, font=f_label)
+
+        cpu_t = stats.get("cpu_temp", 48)
+        c_cpu = temp_color(cpu_t)
+        line1_y = my0 + head_h + int(48*scale)
+        draw.text((px0 + int(14*scale), line1_y), f"ENGINE TEMP: {cpu_t}°C", fill=c_cpu, font=f_num_med)
+
+        line2_y = line1_y + int(24*scale)
+        draw.text((px0 + int(14*scale), line2_y), f"THROTTLE / LOAD: {stats.get('cpu_usage', 0)}%", fill=c_white, font=f_val)
+
+        line3_y = line2_y + int(22*scale)
+        draw.text((px0 + int(14*scale), line3_y), f"FAN RADIATOR: {stats.get('cpu_fan', 0)} RPM", fill=c_slate, font=f_val)
+
+        # Arco do Velocímetro (Barra Progressiva Ciano)
+        bar_y = my1 - int(24*scale)
+        bar_w = (px1 - px0) - int(28*scale)
+        bar_bx = px0 + int(14*scale)
+        draw.rectangle([bar_bx, bar_y, bar_bx + bar_w, bar_y + int(10*scale)], fill="#0b1724", outline="#1e293b", width=1)
+        fill_w = int(bar_w * (min(100, max(0, stats.get("cpu_usage", 0))) / 100.0))
+        if fill_w > 0:
+            draw.rectangle([bar_bx, bar_y, bar_bx + fill_w, bar_y + int(10*scale)], fill=c_cyan)
+
+        # Painel Direito: Conta-Rotações Invertido (GPU RTX 4070 Ti & Turbo)
+        draw.rectangle([rx0, my0, rx1, my0 + head_h], fill="#0369a1")
+        draw.text((rx0 + int(8*scale), my0 + int(4*scale)), "TACHOMETER // NVIDIA RTX 4070 Ti", fill=c_white, font=f_label)
+
+        gpu_load = stats.get("gpu_usage", 0)
+        draw.text((rx0 + int(14*scale), my0 + head_h + int(8*scale)), f"{gpu_load}", fill=c_lime, font=f_speed)
+        draw.text((rx0 + int(85*scale), my0 + head_h + int(20*scale)), "% RPM", fill=c_slate, font=f_label)
+
+        gpu_t = stats.get("gpu_temp", 50)
+        c_gpu = temp_color(gpu_t)
+        draw.text((rx0 + int(14*scale), line1_y), f"OIL / GPU TEMP: {gpu_t}°C", fill=c_gpu, font=f_num_med)
+
+        vram_str = f"{stats.get('gpu_mem_used_gb', 0):.1f} / {stats.get('gpu_mem_total_gb', 12.0):.1f} GB"
+        draw.text((rx0 + int(14*scale), line2_y), f"VRAM BUFFER: {vram_str}", fill=c_white, font=f_val)
+
+        draw.text((rx0 + int(14*scale), line3_y), f"EXHAUST TURBO: {stats.get('gpu_fan', 0)} RPM", fill=c_slate, font=f_val)
+
+        # Barra do Conta-Rotações
+        draw.rectangle([rx0 + int(14*scale), bar_y, rx0 + int(14*scale) + bar_w, bar_y + int(10*scale)], fill="#0b1724", outline="#1e293b", width=1)
+        fill_gw = int(bar_w * (min(100, max(0, stats.get("gpu_usage", 0))) / 100.0))
+        if fill_gw > 0:
+            draw.rectangle([rx0 + int(14*scale), bar_y, rx0 + int(14*scale) + fill_gw, bar_y + int(10*scale)], fill=c_lime)
+
+        # Painel Central: Holograma do 508 SW & Modos de Condução
+        center_x = width // 2
+        badge_w = int(140 * scale)
+        badge_h = int(28 * scale)
+        badge_x = center_x - badge_w // 2
+        badge_y = my1 - int(24 * scale)
+        draw.rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], fill="#08101a", outline=c_cyan, width=2)
+        draw.text((center_x, badge_y + badge_h // 2 - int(1*scale)), "SPORT // D8", fill=c_cyan, font=f_badge, anchor="mm")
+
+        # Barra Inferior: Condução & Computador de Bordo
+        bot_y = bot_y0
+        col_w = (width - int(16*scale)) // (3 if not is_compact else 2)
+
+        draw.text((int(16*scale), bot_y + int(8*scale)), f"BATTERY // RAM: {stats.get('ram_usage', 0)}% ({stats.get('ram_used_gb', 0)} GB)", fill=c_white, font=f_val)
+        draw.text((int(16*scale), bot_y + int(26*scale)), f"CABIN TEMP: {stats.get('sys_temp', 38)}°C", fill=c_slate, font=f_small)
+
+        if not is_compact:
+            c2_x = int(16*scale) + col_w
+            draw.text((c2_x, bot_y + int(8*scale)), f"TRIP SSD C: {stats.get('disk_c_free_gb', 0)} GB LIVRE", fill=c_cyan, font=f_val)
+            draw.text((c2_x, bot_y + int(26*scale)), f"TRIP SSD E: {stats.get('disk_e_free_gb', 0)} GB LIVRE", fill=c_slate, font=f_small)
+
+        c3_x = width - int(180*scale)
+        draw.text((c3_x, bot_y + int(8*scale)), f"FLOW DL: {stats.get('net_down_str', '0.0 KB/s')}", fill="#10b981", font=f_val)
+        draw.text((c3_x, bot_y + int(26*scale)), f"FLOW UL: {stats.get('net_up_str', '0.0 KB/s')}", fill=c_cyan, font=f_small)
+
+        return img
+
     def render_frame(self, stats, width=480, height=320):
         """Renderiza o frame solicitado na resolução desejada."""
         theme_info = self.themes.get(self.current_theme_name, self.themes["Master Telemetry (Todos os Sensores)"])
@@ -1863,6 +2127,8 @@ class SmartCoolApp:
             return self.render_cs2_view(stats, width, height)
         elif layout == "PUBG":
             return self.render_pubg_view(stats, width, height)
+        elif layout == "PEUGEOT_508":
+            return self.render_peugeot_508_view(stats, width, height)
 
         # Temas Legados (480x320)
         if os.path.exists(self.bg_path):
@@ -1941,7 +2207,7 @@ class SmartCoolApp:
         theme_info = self.themes.get(self.current_theme_name, {})
         layout = theme_info.get("layout", "ALL_SENSORS")
 
-        if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG"):
+        if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508"):
             display_frame = self.render_frame(stats, width=cw, height=ch)
             self.preview_image = ImageTk.PhotoImage(display_frame)
             self.canvas.delete("all")
@@ -1960,7 +2226,7 @@ class SmartCoolApp:
 
         # Se a transmissão contínua estiver parada, envia o frame estático inicial para o servidor Wi-Fi
         if not self.running and self.wifi_enabled_var.get() and self.web_server.is_running:
-            wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG") else display_frame
+            wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508") else display_frame
             self.web_server.update_frame(wifi_frame, stats)
 
     def update_preview(self):
@@ -1995,7 +2261,7 @@ class SmartCoolApp:
                     try:
                         theme_info = self.themes.get(self.current_theme_name, {})
                         layout = theme_info.get("layout", "ALL_SENSORS")
-                        wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG") else usb_frame
+                        wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508") else usb_frame
                         self.web_server.update_frame(wifi_frame, stats)
                     except Exception as we:
                         print(f"[App] Erro na frame Wi-Fi 720p: {we}")
