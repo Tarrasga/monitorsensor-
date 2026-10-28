@@ -4044,6 +4044,15 @@ class SmartCoolApp:
                             time.sleep(0.1)
                     except Exception:
                         pass
+                else:
+                    # Auto-reconectar silenciosamente em segundo plano se o ecrã for reinserido
+                    now = time.time()
+                    if not hasattr(self, '_last_usb_recon_try') or (now - self._last_usb_recon_try > 4.0):
+                        self._last_usb_recon_try = now
+                        try:
+                            self.driver.connect("AUTO")
+                        except Exception:
+                            pass
 
                 time.sleep(1.0)
 

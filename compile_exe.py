@@ -28,7 +28,9 @@ namespace MonsterTelemetria
                 psi.FileName = "cmd.exe";
                 psi.Arguments = "/c \"" + batPath + "\"";
                 psi.WorkingDirectory = smartCoolDir;
-                psi.UseShellExecute = true;
+                psi.WindowStyle = ProcessWindowStyle.Hidden;
+                psi.CreateNoWindow = true;
+                psi.UseShellExecute = false;
 
                 Process.Start(psi);
             }

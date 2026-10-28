@@ -46,6 +46,7 @@ class SmartCoolDriver:
         self.serial_conn = None
         self.is_connected = False
         self.tag_counter = 0x12345678
+        self.consecutive_errors = 0
 
     @staticmethod
     def detect_devices():
@@ -103,6 +104,7 @@ class SmartCoolDriver:
 
                         self.connection_type = "USB"
                         self.is_connected = True
+                        self.consecutive_errors = 0
                         return "USB:2A55:9990"
                 except Exception as e:
                     print(f"[Driver] Falha na inicialização USB: {e}")
@@ -247,18 +249,46 @@ class SmartCoolDriver:
             # 3. Ler o CSW (13 bytes) do Endpoint 0x81 (timeout de 3000ms para dar tempo ao LCD blit)
             self.usb_dev.read(self.EP_IN, 13, timeout=3000)
 
+            self.consecutive_errors = 0
             return True
 
         except Exception as e:
-            print(f"[Driver] Erro no ciclo de envio: {e}")
+            self.consecutive_errors += 1
+            if self.consecutive_errors <= 2:
+                print(f"[Driver] Aviso no ciclo de envio: {e}")
+
+            # Limpar stalls / halts no canal USB
             try:
                 self.usb_dev.clear_halt(self.EP_OUT)
                 self.usb_dev.clear_halt(self.EP_IN)
                 for _ in range(3):
                     try:
-                        self.usb_dev.read(self.EP_IN, 64, timeout=150)
+                        self.usb_dev.read(self.EP_IN, 64, timeout=100)
                     except Exception:
                         break
             except Exception:
                 pass
+
+            # Se houver 3 ou mais erros consecutivos (ex: timeout seguido de pipe ou I/O error),
+            # o canal USB perdeu sincronismo ou o cabo foi movido.
+            # Executa auto-recuperação limpa sem inundar o terminal.
+            if self.consecutive_errors >= 3:
+                if self.consecutive_errors == 3:
+                    print("[Driver] Canal USB instável. A restabelecer ligação...")
+                try:
+                    usb.util.dispose_resources(self.usb_dev)
+                except Exception:
+                    pass
+                self.usb_dev = None
+                self.is_connected = False
+
+                # Auto-recuperação imediata
+                try:
+                    time.sleep(0.3)
+                    if self.connect("AUTO"):
+                        self.consecutive_errors = 0
+                        print("[Driver] Comunicação USB restabelecida com sucesso!")
+                except Exception:
+                    pass
+
             return False
