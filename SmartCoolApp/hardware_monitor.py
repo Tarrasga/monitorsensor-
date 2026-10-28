@@ -25,6 +25,12 @@ try:
 except ImportError:
     HAS_WMI = False
 
+try:
+    from fan_controller import FanController
+    HAS_FAN_CONTROLLER = True
+except ImportError:
+    HAS_FAN_CONTROLLER = False
+
 
 class HardwareMonitor:
     def __init__(self):
@@ -270,6 +276,34 @@ class HardwareMonitor:
             if lhm["chassis_fan"] is not None:
                 chassis_fan = lhm["chassis_fan"]
 
+        # 4. Integração com FanController (Velocidades e Rotações das Ventoinhas)
+        cpu_fan_pct = max(25, min(100, int(cpu_usage * 0.7 + 25)))
+        gpu_fan_pct = gpu_fan
+        cpu_fan_auto = True
+        gpu_fan_auto = True
+        gpu_fan_rpm = int(gpu_fan_pct * 29) if gpu_fan_pct > 0 else 0
+
+        if HAS_FAN_CONTROLLER:
+            try:
+                fc = FanController.get_instance()
+                cpu_fan_auto = fc.cpu_fan_auto
+                gpu_fan_auto = fc.gpu_fan_auto
+                if not cpu_fan_auto:
+                    cpu_fan_pct = fc.cpu_fan_target
+                    cpu_fan = fc.get_cpu_rpm_for_pct(cpu_fan_pct)
+                else:
+                    if not (lhm and lhm.get("cpu_fan")):
+                        cpu_fan = fc.get_cpu_rpm_for_pct(cpu_fan_pct)
+
+                if not gpu_fan_auto:
+                    gpu_fan_pct = fc.gpu_fan_target
+                    gpu_fan_rpm = fc.get_gpu_rpm_for_pct(gpu_fan_pct)
+                else:
+                    gpu_fan_pct = gpu_fan
+                    gpu_fan_rpm = fc.get_gpu_rpm_for_pct(gpu_fan_pct)
+            except Exception:
+                pass
+
         return {
             "time": now_time,
             "uptime": uptime_str,
@@ -277,6 +311,8 @@ class HardwareMonitor:
             "cpu_usage": cpu_usage,
             "cpu_ghz": cpu_ghz,
             "cpu_fan": cpu_fan,
+            "cpu_fan_pct": cpu_fan_pct,
+            "cpu_fan_auto": cpu_fan_auto,
             "cpu_power": cpu_power,
             "cpu_cores": self.cpu_cores_str,
             "gpu_name": gpu_name,
@@ -286,6 +322,9 @@ class HardwareMonitor:
             "gpu_vram_total": gpu_vram_total,
             "gpu_vram_pct": gpu_vram_pct,
             "gpu_fan": gpu_fan,
+            "gpu_fan_pct": gpu_fan_pct,
+            "gpu_fan_auto": gpu_fan_auto,
+            "gpu_fan_rpm": gpu_fan_rpm,
             "gpu_power": gpu_power,
             "gpu_clock": gpu_clock,
             "gpu_mem_clock": gpu_mem_clock,

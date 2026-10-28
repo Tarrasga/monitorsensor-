@@ -19,10 +19,11 @@ echo   [10] Monster Energy (Claw / Garra)
 echo   [11] ROG Dark Gaming (TARRASGA)
 echo   [12] Master Telemetry (Todos os Sensores)
 echo   [13] HUD Overlay Transparente (Glass HUD)
+echo   [14] Cyber Neon Dual (Azul & Vermelho - Barras Fans)
 echo.
 echo   [0]  Sair
 echo ================================================================
-set /p opcao="Escolha o numero do tema pretendido [0-13]: "
+set /p opcao="Escolha o numero do tema pretendido [0-14]: "
 
 if "%opcao%"=="1" (call ENVIAR_TEMA_MESA_MISTURA.bat & goto MENU)
 if "%opcao%"=="2" (call ENVIAR_TEMA_PEUGEOT_508.bat & goto MENU)
@@ -37,5 +38,6 @@ if "%opcao%"=="10" (call ENVIAR_TEMA_MONSTER_GARRA.bat & goto MENU)
 if "%opcao%"=="11" (call ENVIAR_TEMA_ROG.bat & goto MENU)
 if "%opcao%"=="12" (call ENVIAR_TEMA_SENSORES.bat & goto MENU)
 if "%opcao%"=="13" (call ENVIAR_TEMA_TRANSPARENTE.bat & goto MENU)
+if "%opcao%"=="14" (call ENVIAR_TEMA_NEON_DUAL.bat & goto MENU)
 if "%opcao%"=="0" exit
 goto MENU

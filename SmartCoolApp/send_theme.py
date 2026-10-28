@@ -75,6 +75,10 @@ elif target in ("transparente", "transparent", "glass", "overlay", "glass_hud", 
     image_path = os.path.join(assets_dir, "preview_theme_transparent_usb.png")
     if not os.path.exists(image_path):
         image_path = os.path.join(assets_dir, "preview_theme_transparent.png")
+elif target in ("neon_dual", "neon", "dual_neon", "azul_vermelho", "fans", "cyber_neon"):
+    image_path = os.path.join(assets_dir, "preview_theme_neon_dual_usb.png")
+    if not os.path.exists(image_path):
+        image_path = os.path.join(assets_dir, "preview_theme_neon_dual.png")
 else:
     image_path = target
 
