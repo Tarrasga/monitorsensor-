@@ -40,6 +40,16 @@ class MONITORINFO(ctypes.Structure):
                 ('dwFlags', wintypes.DWORD)]
 
 
+class MONITORINFOEX(ctypes.Structure):
+    _fields_ = [
+        ('cbSize', wintypes.DWORD),
+        ('rcMonitor', RECT),
+        ('rcWork', RECT),
+        ('dwFlags', wintypes.DWORD),
+        ('szDevice', wintypes.WCHAR * 32)
+    ]
+
+
 def get_current_monitor_rect(hwnd):
     """Devolve (left, top, width, height) do monitor onde a janela está atualmente."""
     try:
@@ -51,6 +61,55 @@ def get_current_monitor_rect(hwnd):
         return r.left, r.top, r.right - r.left, r.bottom - r.top
     except Exception:
         return 0, 0, user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+
+
+def get_all_monitors():
+    """Devolve a lista detalhada de todos os monitores conectados ao Windows."""
+    monitors = []
+    def _enum_proc(hMonitor, hdcMonitor, lprcMonitor, dwData):
+        mi = MONITORINFOEX()
+        mi.cbSize = ctypes.sizeof(MONITORINFOEX)
+        user32.GetMonitorInfoW(hMonitor, ctypes.byref(mi))
+        r = mi.rcMonitor
+        is_primary = bool(mi.dwFlags & 1)
+        w = r.right - r.left
+        h = r.bottom - r.top
+        dev = mi.szDevice.replace("\\\\.\\", "")
+        orient = "Vertical" if h > w else "16:9"
+        pri = " [Principal]" if is_primary else ""
+        label = f"Ecrã {len(monitors)+1} ({dev}): {w}x{h} ({orient}){pri}"
+        monitors.append({
+            'index': len(monitors) + 1,
+            'device': mi.szDevice,
+            'label': label,
+            'left': r.left,
+            'top': r.top,
+            'width': w,
+            'height': h,
+            'is_primary': is_primary,
+            'is_portrait': h > w
+        })
+        return True
+
+    try:
+        MONITORENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HMONITOR, wintypes.HDC, ctypes.POINTER(RECT), wintypes.LPARAM)
+        user32.EnumDisplayMonitors(None, None, MONITORENUMPROC(_enum_proc), 0)
+    except Exception:
+        pass
+
+    if not monitors:
+        monitors.append({
+            'index': 1,
+            'device': 'DISPLAY1',
+            'label': f'Ecrã 1: {user32.GetSystemMetrics(0)}x{user32.GetSystemMetrics(1)} [Principal]',
+            'left': 0,
+            'top': 0,
+            'width': user32.GetSystemMetrics(0),
+            'height': user32.GetSystemMetrics(1),
+            'is_primary': True,
+            'is_portrait': False
+        })
+    return monitors
 
 
 class SmartCoolApp:
@@ -460,7 +519,61 @@ class SmartCoolApp:
             activebackground="#0d111a",
             activeforeground="#10b981"
         )
-        self.chk_topmost.pack(anchor="w", pady=(0, 8))
+        self.chk_topmost.pack(anchor="w", pady=(0, 6))
+
+        # Grupo: Seletor de Monitor (Multi-Monitor Auto-Fit)
+        mon_box = tk.LabelFrame(
+            self.controls_inner,
+            text="🖥️ SELETOR DE MONITOR (AUTO-FIT)",
+            font=("Segoe UI", 8, "bold"),
+            fg="#10b981",
+            bg="#0d111a",
+            padx=8,
+            pady=8
+        )
+        mon_box.pack(fill=tk.X, pady=(0, 10))
+
+        lbl_mon = tk.Label(mon_box, text="Enviar ecrã para monitor:", font=("Segoe UI", 8), fg="#94a3b8", bg="#0d111a")
+        lbl_mon.pack(anchor="w", pady=(0, 3))
+
+        self.monitors_list = get_all_monitors()
+        mon_names = [m["label"] for m in self.monitors_list]
+        self.mon_combo = ttk.Combobox(mon_box, state="readonly", values=mon_names)
+        if mon_names:
+            default_m_idx = 1 if len(mon_names) > 1 else 0
+            self.mon_combo.current(default_m_idx)
+        self.mon_combo.pack(fill=tk.X, pady=(0, 6))
+
+        mon_btn_row = tk.Frame(mon_box, bg="#0d111a")
+        mon_btn_row.pack(fill=tk.X, pady=(2, 0))
+
+        btn_send_mon = tk.Button(
+            mon_btn_row,
+            text="⛶ EXPANDIR",
+            command=self._on_expand_to_selected_monitor,
+            bg="#1e293b",
+            fg="#10b981",
+            activebackground="#2e3e56",
+            activeforeground="#10b981",
+            relief=tk.FLAT,
+            font=("Segoe UI", 8, "bold"),
+            pady=3
+        )
+        btn_send_mon.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2))
+
+        btn_move_win = tk.Button(
+            mon_btn_row,
+            text="🗗 MOVER",
+            command=self._on_move_window_to_selected_monitor,
+            bg="#1e293b",
+            fg="#38bdf8",
+            activebackground="#2e3e56",
+            activeforeground="#38bdf8",
+            relief=tk.FLAT,
+            font=("Segoe UI", 8, "bold"),
+            pady=3
+        )
+        btn_move_win.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(2, 0))
 
         # Grupo: Controlo de Velocidade de Ventoinhas (CPU e GPU)
         fan_box = tk.LabelFrame(
@@ -891,6 +1004,57 @@ class SmartCoolApp:
         )
         btn_close.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(6, 0))
 
+    def move_to_monitor(self, monitor_index, expand=True):
+        """Move a janela para o monitor indicado e ajusta automaticamente (Auto-Fit universal)."""
+        monitors = get_all_monitors()
+        if not (0 <= monitor_index < len(monitors)):
+            return
+        target = monitors[monitor_index]
+        mx, my, mw, mh = target['left'], target['top'], target['width'], target['height']
+
+        if expand:
+            if not self.is_fullscreen:
+                self.saved_geometry = self.root.geometry()
+                self.is_fullscreen = True
+                self.controls_col.pack_forget()
+                self.header_frame.pack_forget()
+                self.status_bar.pack_forget()
+                self.content_frame.config(padx=0, pady=0)
+                self.preview_col.config(padx=0, pady=0)
+                self.btn_fullscreen.config(text="🗗 RESTAURAR (ESC)")
+
+            self.root.overrideredirect(True)
+            self.root.geometry(f"{mw}x{mh}+{mx}+{my}")
+            try:
+                self.root.attributes("-topmost", self.always_on_top_var.get())
+            except Exception:
+                pass
+            self.root.focus_force()
+            self.canvas.focus_set()
+        else:
+            if self.is_fullscreen:
+                self._exit_fullscreen()
+            win_w = min(1120, int(mw * 0.9))
+            win_h = min(740, int(mh * 0.9))
+            win_x = mx + (mw - win_w) // 2
+            win_y = my + (mh - win_h) // 2
+            self.root.geometry(f"{win_w}x{win_h}+{win_x}+{win_y}")
+
+        self.root.update_idletasks()
+        if self.last_stats:
+            self._update_canvas_display(self.last_stats)
+        self.status_bar.config(text=f"Ajustado com sucesso para {target['label']}")
+
+    def _on_expand_to_selected_monitor(self):
+        sel_idx = self.mon_combo.current()
+        if sel_idx >= 0:
+            self.move_to_monitor(sel_idx, expand=True)
+
+    def _on_move_window_to_selected_monitor(self):
+        sel_idx = self.mon_combo.current()
+        if sel_idx >= 0:
+            self.move_to_monitor(sel_idx, expand=False)
+
     def _toggle_fullscreen(self, event=None):
         """Expande ou restaura a janela NO MONITOR ONDE ELA ESTÁ (sem saltar para o monitor primário)."""
         self.is_fullscreen = not self.is_fullscreen
@@ -1191,7 +1355,7 @@ class SmartCoolApp:
 
     def render_sensors_view(self, stats, width, height):
         """Renderiza o tema 'Master Telemetry' nativamente em qualquer resolução (HD ou USB)."""
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         is_compact = (width <= 640)
 
         def get_f(family, size, bold=False):
@@ -1494,7 +1658,7 @@ class SmartCoolApp:
 
     def render_speedometer_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'Velocímetros de Carro' em qualquer resolução (HD ou 480x320)."""
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         img = Image.new("RGB", (width, height), "#06090e")
         draw = ImageDraw.Draw(img)
 
@@ -1645,7 +1809,7 @@ class SmartCoolApp:
 
     def render_airplane_cockpit_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'Cockpit de Avião' (Fighter Jet / Glass HUD) em qualquer resolução."""
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         img = Image.new("RGB", (width, height), "#02070a")
         draw = ImageDraw.Draw(img)
 
@@ -1787,7 +1951,7 @@ class SmartCoolApp:
 
     def render_gt_cockpit_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'Cockpit de Carro GT' (Racing Telemetry) em qualquer resolução."""
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         img = Image.new("RGB", (width, height), "#05070a")
         draw = ImageDraw.Draw(img)
 
@@ -1892,7 +2056,7 @@ class SmartCoolApp:
 
     def render_xr2_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'Ford Fiesta XR2 Mk2' (Fotografia Realista & Telemetria 80s Hot Hatch)."""
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         is_compact = (width <= 640)
 
         # 1. Carregar fotografia do Ford Fiesta XR2 Mk2
@@ -2052,7 +2216,7 @@ class SmartCoolApp:
 
     def render_cs2_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'Counter-Strike 2' (CS2 Tactical HUD)."""
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         is_compact = (width <= 640)
 
         # 1. Carregar Wallpaper CS2
@@ -2209,7 +2373,7 @@ class SmartCoolApp:
 
     def render_pubg_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'PUBG Battlegrounds' (Erangel Survival HUD)."""
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         is_compact = (width <= 640)
 
         # 1. Carregar Wallpaper PUBG
@@ -2365,7 +2529,7 @@ class SmartCoolApp:
 
     def render_peugeot_508_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'Peugeot 508 SW' (Digital i-Cockpit GT Cluster)."""
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         is_compact = (width <= 640)
 
         # 1. Carregar Wallpaper do Peugeot 508 SW i-Cockpit
@@ -2529,7 +2693,7 @@ class SmartCoolApp:
 
     def render_mixer_view(self, stats, width=1280, height=720):
         """Renderiza o tema 'Mesa de Mistura DJ' (Studio Audio Equalizer)."""
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         is_compact = (width <= 640)
 
         # 1. Carregar Wallpaper de Mesa de Mistura
@@ -2707,7 +2871,7 @@ class SmartCoolApp:
         """Renderiza o tema 'HUD Overlay Transparente (Glass HUD)'.
         Utiliza a cor chroma-key (1, 2, 3) no fundo para transparência 100% nativa no Windows DWM,
         deixando os mostradores e cartões de vidro a flutuar diretamente sobre o 2º ecrã sem colisões de texto!"""
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         is_compact = (width <= 640)
 
         # 1. Fundo Puro Chroma-Key (1, 2, 3) -> 100% transparente no ecrã do PC
@@ -2955,38 +3119,48 @@ class SmartCoolApp:
         return img
 
     def _draw_fan_speed_bar(self, draw, x0, y0, w, h, percent, rpm, is_auto, title, primary_color, dark_color, scale):
-        """Desenha uma barra neon cibernética com segmentos iluminados e graduação percentual."""
+        """Desenha uma barra neon cibernética sem colisões mesmo em larguras reduzidas."""
         self._draw_hud_bracket_card(draw, x0, y0, x0 + w, y0 + h, scale, fill=(10, 14, 22), border=primary_color, bracket_len=8)
 
-        f_title = self._get_font("ui", 8.5, scale, bold=True)
-        f_badge = self._get_font("mono", 7.5, scale, bold=True)
-        f_val = self._get_font("mono", 12.0, scale, bold=True)
-        f_rpm = self._get_font("ui", 8.5, scale, bold=False)
-        f_ticks = self._get_font("mono", 7.0, scale, bold=False)
+        f_title = self._get_font("ui", 7.5, scale, bold=True)
+        f_badge = self._get_font("mono", 6.8, scale, bold=True)
+        f_val = self._get_font("mono", 10.0, scale, bold=True)
+        f_rpm = self._get_font("ui", 7.5, scale, bold=False)
+        f_ticks = self._get_font("mono", 6.0, scale, bold=False)
 
-        pad_x = int(10 * scale)
-        pad_y = int(6 * scale)
+        pad_x = int(8 * scale)
+        pad_y = int(5 * scale)
 
-        # Linha 1: Título e Badge de Modo [AUTO / MANUAL]
+        # Linha 1: Título e Badge de Modo [AUTO / MANUAL] com teste de colisão
         mode_text = "[ AUTO ]" if is_auto else "[ MANUAL ]"
         mode_color = "#10b981" if is_auto else "#f59e0b"
-        draw.text((x0 + pad_x, y0 + pad_y), title, fill="#f8fafc", font=f_title, anchor="lt")
+
+        disp_title = title
+        t_bbox = draw.textbbox((x0 + pad_x, y0 + pad_y), disp_title, font=f_title, anchor="lt")
+        m_bbox = draw.textbbox((x0 + w - pad_x, y0 + pad_y), mode_text, font=f_badge, anchor="rt")
+        if t_bbox[2] + int(8*scale) > m_bbox[0]:
+            disp_title = title.split("(")[0].strip()
+            t_bbox = draw.textbbox((x0 + pad_x, y0 + pad_y), disp_title, font=f_title, anchor="lt")
+            if t_bbox[2] + int(6*scale) > m_bbox[0]:
+                disp_title = "CPU FAN" if "CPU" in title else "GPU FAN"
+
+        draw.text((x0 + pad_x, y0 + pad_y), disp_title, fill="#f8fafc", font=f_title, anchor="lt")
         draw.text((x0 + w - pad_x, y0 + pad_y), mode_text, fill=mode_color, font=f_badge, anchor="rt")
 
         # Linha 2: Valores (% e RPM)
-        val_y = y0 + pad_y + int(14 * scale)
+        val_y = y0 + pad_y + int(12 * scale)
         draw.text((x0 + pad_x, val_y), f"{percent}%", fill=primary_color, font=f_val, anchor="lt")
         draw.text((x0 + w - pad_x, val_y + int(2 * scale)), f"{rpm} RPM", fill="#cbd5e1", font=f_rpm, anchor="rt")
 
         # Linha 3: Barra Segmentada de LEDs
-        bar_y0 = val_y + int(17 * scale)
-        bar_h = max(6, int(10 * scale))
+        bar_y0 = val_y + int(14 * scale)
+        bar_h = max(5, int(8 * scale))
         bar_w = w - (pad_x * 2)
         bar_x0 = x0 + pad_x
 
         num_segments = 20
-        gap = max(1, int(2 * scale))
-        seg_w = (bar_w - (num_segments - 1) * gap) / float(num_segments)
+        gap = max(1, int(1.5 * scale))
+        seg_w = max(2.0, (bar_w - (num_segments - 1) * gap) / float(num_segments))
 
         norm_pct = max(0, min(100, percent))
         active_count = int(round(norm_pct / 100.0 * num_segments))
@@ -2994,6 +3168,8 @@ class SmartCoolApp:
         for i in range(num_segments):
             sx0 = bar_x0 + int(i * (seg_w + gap))
             sx1 = sx0 + int(seg_w)
+            if sx1 > bar_x0 + bar_w:
+                break
             if i < active_count:
                 if i >= num_segments - 3:
                     fill_c = "#ef4444" if primary_color != "#ff0055" else "#ffea00"
@@ -3018,7 +3194,7 @@ class SmartCoolApp:
         - Centro: Hub de Rede, Motherboard e Perfis de Ventoinhas
         - Lado Direito: Blazing Red (#ff0055) com GPU RTX 4070 Ti, Discos e Barra de Controlo de Ventoinha da Gráfica
         """
-        scale = height / 320.0
+        scale = min(width / 568.888, height / 320.0)
         bg_file = os.path.join(self.assets_dir, "neon_dual_bg.jpg")
         if os.path.exists(bg_file):
             try:
@@ -3040,40 +3216,52 @@ class SmartCoolApp:
         c_emerald = "#10b981"
         c_amber = "#f59e0b"
 
-        # Fontes principais
-        f_header = self._get_font("ui", 10.5, scale, bold=True)
-        f_clock = self._get_font("mono", 11.5, scale, bold=True)
-        f_title = self._get_font("ui", 9.5, scale, bold=True)
-        f_val = self._get_font("mono", 10.0, scale, bold=True)
-        f_small = self._get_font("ui", 8.5, scale, bold=False)
-        f_micro = self._get_font("mono", 7.5, scale, bold=False)
+        # Fontes calibradas
+        f_header = self._get_font("ui", 8.5, scale, bold=True)
+        f_clock = self._get_font("mono", 9.5, scale, bold=True)
+        f_title = self._get_font("ui", 7.5, scale, bold=True)
+        f_val = self._get_font("mono", 8.5, scale, bold=True)
+        f_small = self._get_font("ui", 7.0, scale, bold=False)
+        f_micro = self._get_font("mono", 6.5, scale, bold=False)
 
         # 1. Barra Superior Cabeçalho
-        top_h = int(24 * min(1.3, scale))
-        self._draw_hud_bracket_card(draw, int(8*scale), int(4*scale), width - int(8*scale), top_h + int(4*scale), scale, fill=(8, 12, 18), border=(0, 229, 255), bracket_len=8)
+        top_h = int(22 * min(1.3, scale))
+        self._draw_hud_bracket_card(draw, int(6*scale), int(4*scale), width - int(6*scale), top_h + int(4*scale), scale, fill=(8, 12, 18), border=(0, 229, 255), bracket_len=8)
         dot_cy = (int(4*scale) + top_h + int(4*scale)) // 2
 
-        # Lado Esquerdo Header (Azul)
-        draw.ellipse([int(18*scale), dot_cy - int(3*scale), int(24*scale), dot_cy + int(3*scale)], fill=c_cyan)
-        draw.text((int(30*scale), dot_cy), "MONSTER TELEMETRIA // CYBER NEON DUAL", fill=c_white, font=f_header, anchor="lm")
+        # Lado Esquerdo Header
+        left_title = "MONSTER TELEMETRIA // DUAL NEON" if width >= 600 else "MONSTER // NEON"
+        draw.ellipse([int(12*scale), dot_cy - int(2.5*scale), int(17*scale), dot_cy + int(2.5*scale)], fill=c_cyan)
+        draw.text((int(22*scale), dot_cy), left_title, fill=c_white, font=f_header, anchor="lm")
+        t_left_bbox = draw.textbbox((int(22*scale), dot_cy), left_title, font=f_header, anchor="lm")
 
-        # Centro Header (Relógio)
+        # Lado Direito Header
+        right_info = f"RTX 4070 Ti // {stats.get('cpu_cores', '14C/20T')}" if width >= 700 else stats.get("gpu_name", "RTX 4070 Ti")
+        draw.ellipse([width - int(17*scale), dot_cy - int(2.5*scale), width - int(12*scale), dot_cy + int(2.5*scale)], fill=c_red)
+        draw.text((width - int(22*scale), dot_cy), right_info, fill="#ff99bb", font=f_header, anchor="rm")
+        t_right_bbox = draw.textbbox((width - int(22*scale), dot_cy), right_info, font=f_header, anchor="rm")
+
+        # Centro Header: Relógio com deteção dinâmica de espaço livre (ZERO colisão)
         clock_str = stats.get("time", "12:00:00")
-        uptime_str = f"UPTIME: {stats.get('uptime', '2h 15m')}"
-        draw.text((width // 2, dot_cy), f"{clock_str}   //   {uptime_str}", fill=c_cyan, font=f_clock, anchor="mm")
+        uptime_str = f"UPTIME {stats.get('uptime', '2h 15m')}"
+        center_text = f"{clock_str}   //   {uptime_str}" if width >= 800 else clock_str
+        c_bbox = draw.textbbox((width // 2, dot_cy), center_text, font=f_clock, anchor="mm")
 
-        # Lado Direito Header (Vermelho)
-        draw.ellipse([width - int(24*scale), dot_cy - int(3*scale), width - int(18*scale), dot_cy + int(3*scale)], fill=c_red)
-        draw.text((width - int(32*scale), dot_cy), f"RTX 4070 Ti // {stats.get('cpu_cores', '14C/20T')}", fill="#ff99bb", font=f_header, anchor="rm")
+        if t_left_bbox[2] + int(20*scale) < c_bbox[0] and c_bbox[2] + int(20*scale) < t_right_bbox[0]:
+            draw.text((width // 2, dot_cy), center_text, fill=c_cyan, font=f_clock, anchor="mm")
+        else:
+            c_short_bbox = draw.textbbox((width // 2, dot_cy), clock_str, font=f_clock, anchor="mm")
+            if t_left_bbox[2] + int(8*scale) < c_short_bbox[0] and c_short_bbox[2] + int(8*scale) < t_right_bbox[0]:
+                draw.text((width // 2, dot_cy), clock_str, fill=c_cyan, font=f_clock, anchor="mm")
 
         # 2. Dimensões das 3 Colunas: Esquerda (CPU - Azul), Centro (Hub), Direita (GPU - Vermelho)
-        content_y0 = top_h + int(10 * scale)
-        bot_h = int(20 * min(1.2, scale))
-        content_y1 = height - bot_h - int(8 * scale)
+        content_y0 = top_h + int(8 * scale)
+        bot_h = int(18 * min(1.2, scale))
+        content_y1 = height - bot_h - int(6 * scale)
         avail_h = content_y1 - content_y0
 
-        col_gap = int(10 * scale)
-        margin_x = int(8 * scale)
+        col_gap = int(8 * scale)
+        margin_x = int(6 * scale)
         col_w = (width - (margin_x * 2) - (col_gap * 2)) // 3
 
         left_x0 = margin_x
@@ -3086,172 +3274,172 @@ class SmartCoolApp:
         right_x1 = width - margin_x
 
         # ==================== COLUNA ESQUERDA: CPU & RAM (NEON AZUL) ====================
-        # Cartão CPU Principal (Metade superior)
         cpu_card_h = int(avail_h * 0.44)
         self._draw_hud_bracket_card(draw, left_x0, content_y0, left_x1, content_y0 + cpu_card_h, scale, fill=(8, 14, 22), border=(0, 229, 255), bracket_len=12)
 
         # Mostrador Circular CPU
-        gauge_r = min(36, int(cpu_card_h * 0.28))
-        gauge_cx = left_x0 + int(col_w * 0.32)
+        gauge_r = min(32, int(cpu_card_h * 0.28))
+        gauge_cx = left_x0 + int(col_w * 0.30)
         gauge_cy = content_y0 + int(cpu_card_h * 0.52)
         c_temp_cpu = c_cyan if stats["cpu_temp"] < 60 else (c_amber if stats["cpu_temp"] < 75 else c_red)
         self._draw_circular_hud_meter(draw, gauge_cx, gauge_cy, gauge_r, stats["cpu_usage"], scale, label="CPU LOAD", val_str=f"{stats['cpu_usage']}%", temp_str=f"{stats['cpu_temp']}°C", primary_color=c_cyan, temp_color=c_temp_cpu)
 
-        # Detalhes textuais à direita do mostrador CPU
-        det_x = left_x0 + int(col_w * 0.62)
-        det_y = content_y0 + int(16 * scale)
+        # Detalhes textuais CPU
+        det_x = left_x0 + int(col_w * 0.58)
+        det_y = content_y0 + int(12 * scale)
         draw.text((det_x, det_y), "INTEL CORE", fill=c_cyan, font=f_title, anchor="la")
-        det_y += int(16 * scale)
+        det_y += int(14 * scale)
         draw.text((det_x, det_y), f"CLOCK: {stats.get('cpu_ghz', 3.5)} GHz", fill=c_white, font=f_small, anchor="la")
-        det_y += int(14 * scale)
+        det_y += int(12 * scale)
         draw.text((det_x, det_y), f"POWER: {stats.get('cpu_power', 45)} W", fill=c_slate, font=f_small, anchor="la")
-        det_y += int(14 * scale)
+        det_y += int(12 * scale)
         draw.text((det_x, det_y), f"CORES: {stats.get('cpu_cores', '14C / 20T')}", fill=c_slate, font=f_small, anchor="la")
 
         # BARRA DE VELOCIDADE DA VENTOINHA DO CPU
-        cpu_fan_y0 = content_y0 + cpu_card_h + int(6 * scale)
+        cpu_fan_y0 = content_y0 + cpu_card_h + int(5 * scale)
         cpu_fan_h = int(avail_h * 0.26)
         cpu_fan_pct = stats.get("cpu_fan_pct", 60)
         cpu_fan_rpm = stats.get("cpu_fan", 1750)
         cpu_fan_auto = stats.get("cpu_fan_auto", True)
         self._draw_fan_speed_bar(draw, left_x0, cpu_fan_y0, col_w, cpu_fan_h, cpu_fan_pct, cpu_fan_rpm, cpu_fan_auto, title="⚡ CPU FAN SPEED", primary_color=c_cyan, dark_color=(8, 30, 45), scale=scale)
 
-        # CARTÃO RAM MEMÓRIA (Parte inferior esquerda)
-        ram_y0 = cpu_fan_y0 + cpu_fan_h + int(6 * scale)
-        ram_h = content_y1 - ram_y0
+        # CARTÃO RAM MEMÓRIA
+        ram_y0 = cpu_fan_y0 + cpu_fan_h + int(5 * scale)
         self._draw_hud_bracket_card(draw, left_x0, ram_y0, left_x1, content_y1, scale, fill=(8, 14, 22), border=(0, 229, 255), bracket_len=8)
 
-        draw.text((left_x0 + int(10*scale), ram_y0 + int(6*scale)), "MEMÓRIA RAM DDR5", fill=c_cyan, font=f_title, anchor="lt")
-        draw.text((left_x1 - int(10*scale), ram_y0 + int(6*scale)), f"{stats['ram_usage']}%", fill=c_white, font=f_val, anchor="rt")
+        draw.text((left_x0 + int(8*scale), ram_y0 + int(5*scale)), "MEMÓRIA RAM DDR5", fill=c_cyan, font=f_title, anchor="lt")
+        draw.text((left_x1 - int(8*scale), ram_y0 + int(5*scale)), f"{stats['ram_usage']}%", fill=c_white, font=f_val, anchor="rt")
 
-        ram_bar_y = ram_y0 + int(24 * scale)
-        ram_bar_h = max(5, int(8 * scale))
-        ram_bar_w = col_w - int(20 * scale)
-        draw.rectangle([left_x0 + int(10*scale), ram_bar_y, left_x0 + int(10*scale) + ram_bar_w, ram_bar_y + ram_bar_h], fill=(12, 24, 34))
+        ram_bar_y = ram_y0 + int(20 * scale)
+        ram_bar_h = max(4, int(6 * scale))
+        ram_bar_w = col_w - int(16 * scale)
+        draw.rectangle([left_x0 + int(8*scale), ram_bar_y, left_x0 + int(8*scale) + ram_bar_w, ram_bar_y + ram_bar_h], fill=(12, 24, 34))
         ram_fill_w = int(ram_bar_w * (stats["ram_usage"] / 100.0))
         if ram_fill_w > 0:
-            draw.rectangle([left_x0 + int(10*scale), ram_bar_y, left_x0 + int(10*scale) + ram_fill_w, ram_bar_y + ram_bar_h], fill=c_cyan)
+            draw.rectangle([left_x0 + int(8*scale), ram_bar_y, left_x0 + int(8*scale) + ram_fill_w, ram_bar_y + ram_bar_h], fill=c_cyan)
 
-        draw.text((left_x0 + int(10*scale), ram_bar_y + ram_bar_h + int(4*scale)), f"USADO: {stats['ram_used_gb']} GB", fill=c_slate, font=f_micro, anchor="lt")
-        draw.text((left_x1 - int(10*scale), ram_bar_y + ram_bar_h + int(4*scale)), f"TOTAL: {stats['ram_total_gb']} GB", fill=c_slate, font=f_micro, anchor="rt")
+        draw.text((left_x0 + int(8*scale), ram_bar_y + ram_bar_h + int(3*scale)), f"USADO: {stats['ram_used_gb']} GB", fill=c_slate, font=f_micro, anchor="lt")
+        draw.text((left_x1 - int(8*scale), ram_bar_y + ram_bar_h + int(3*scale)), f"TOTAL: {stats['ram_total_gb']} GB", fill=c_slate, font=f_micro, anchor="rt")
 
 
         # ==================== COLUNA CENTRAL: TELEMETRIA GERAL & REDE ====================
         self._draw_hud_bracket_card(draw, mid_x0, content_y0, mid_x1, content_y1, scale, fill=(10, 14, 20), border=(70, 90, 120), bracket_len=10)
 
         # Cabeçalho Central
-        m_pad = int(12 * scale)
-        m_cy = content_y0 + int(12 * scale)
-        draw.text((mid_x0 + col_w // 2, m_cy), "CENTRO DE CONTROLO TARRASGA", fill="#38bdf8", font=f_header, anchor="mt")
+        m_pad = int(8 * scale)
+        m_cy = content_y0 + int(10 * scale)
+        center_hub_title = "CENTRO DE CONTROLO" if col_w < 320 else "CENTRO DE CONTROLO TARRASGA"
+        draw.text((mid_x0 + col_w // 2, m_cy), center_hub_title, fill="#38bdf8", font=f_header, anchor="mt")
 
         # Status dos Perfis de Ventoinhas
-        prof_y0 = m_cy + int(20 * scale)
+        prof_y0 = m_cy + int(16 * scale)
         draw.text((mid_x0 + col_w // 2, prof_y0), "PERFIL ATIVO DE ARREFECIMENTO:", fill=c_slate, font=f_micro, anchor="mt")
 
-        prof_y1 = prof_y0 + int(14 * scale)
-        profiles = ["AUTO", "SILÊNCIO", "EQUILÍBRIO", "GAMING", "TURBO"]
+        prof_y1 = prof_y0 + int(12 * scale)
+        profiles = ["AUTO", "SILÊNCIO", "EQUILÍBRIO", "GAMING", "TURBO"] if col_w >= 300 else ["AUTO", "SIL", "EQU", "GAME", "MAX"]
         avg_fan = (cpu_fan_pct + stats.get("gpu_fan_pct", 50)) // 2
         if cpu_fan_auto and stats.get("gpu_fan_auto", True):
-            cur_prof = "AUTO"
+            cur_prof = profiles[0]
         elif avg_fan <= 40:
-            cur_prof = "SILÊNCIO"
+            cur_prof = profiles[1]
         elif avg_fan <= 60:
-            cur_prof = "EQUILÍBRIO"
+            cur_prof = profiles[2]
         elif avg_fan <= 85:
-            cur_prof = "GAMING"
+            cur_prof = profiles[3]
         else:
-            cur_prof = "TURBO"
+            cur_prof = profiles[4]
 
-        p_w = (col_w - (m_pad * 2) - (len(profiles) - 1) * int(4*scale)) // len(profiles)
+        p_w = max(10, (col_w - (m_pad * 2) - (len(profiles) - 1) * int(3*scale)) // len(profiles))
         for idx, p_name in enumerate(profiles):
-            px0 = mid_x0 + m_pad + idx * (p_w + int(4*scale))
+            px0 = mid_x0 + m_pad + idx * (p_w + int(3*scale))
             px1 = px0 + p_w
             py0 = prof_y1
-            py1 = py0 + int(16 * scale)
+            py1 = py0 + int(14 * scale)
             is_cur = (p_name == cur_prof)
             bg_col = (0, 229, 255) if (is_cur and idx < 2) else ((255, 0, 85) if (is_cur and idx >= 3) else ((16, 185, 129) if is_cur else (18, 26, 36)))
             fg_col = "#07090e" if is_cur else "#64748b"
             draw.rectangle([px0, py0, px1, py1], fill=bg_col)
-            draw.text(((px0 + px1) // 2, (py0 + py1) // 2), p_name, fill=fg_col, font=self._get_font("ui", 6.8, scale, bold=True), anchor="mm")
+            draw.text(((px0 + px1) // 2, (py0 + py1) // 2), p_name, fill=fg_col, font=self._get_font("ui", 6.0, scale, bold=True), anchor="mm")
 
-        # Módulo de Rede (Download & Upload)
-        net_y0 = prof_y1 + int(28 * scale)
+        # Módulo de Rede
+        net_y0 = prof_y1 + int(24 * scale)
         self._draw_hud_bracket_card(draw, mid_x0 + m_pad, net_y0, mid_x1 - m_pad, net_y0 + int(avail_h * 0.28), scale, fill=(12, 18, 26), border=(56, 189, 248), bracket_len=6)
-        draw.text((mid_x0 + m_pad + int(8*scale), net_y0 + int(6*scale)), "TRÁFEGO DE REDE WI-FI / LAN", fill="#38bdf8", font=f_title, anchor="lt")
+        draw.text((mid_x0 + m_pad + int(6*scale), net_y0 + int(5*scale)), "TRÁFEGO DE REDE WI-FI / LAN", fill="#38bdf8", font=f_title, anchor="lt")
 
-        down_y = net_y0 + int(24 * scale)
-        draw.text((mid_x0 + m_pad + int(8*scale), down_y), "▼ DOWNLOAD:", fill=c_slate, font=f_small, anchor="lt")
-        draw.text((mid_x1 - m_pad - int(8*scale), down_y), stats.get("net_down_str", "0 KB/s"), fill=c_emerald, font=f_val, anchor="rt")
+        down_y = net_y0 + int(20 * scale)
+        draw.text((mid_x0 + m_pad + int(6*scale), down_y), "▼ DOWNLOAD:", fill=c_slate, font=f_small, anchor="lt")
+        draw.text((mid_x1 - m_pad - int(6*scale), down_y), stats.get("net_down_str", "0 KB/s"), fill=c_emerald, font=f_val, anchor="rt")
 
-        up_y = down_y + int(18 * scale)
-        draw.text((mid_x0 + m_pad + int(8*scale), up_y), "▲ UPLOAD:", fill=c_slate, font=f_small, anchor="lt")
-        draw.text((mid_x1 - m_pad - int(8*scale), up_y), stats.get("net_up_str", "0 KB/s"), fill="#38bdf8", font=f_val, anchor="rt")
+        up_y = down_y + int(14 * scale)
+        draw.text((mid_x0 + m_pad + int(6*scale), up_y), "▲ UPLOAD:", fill=c_slate, font=f_small, anchor="lt")
+        draw.text((mid_x1 - m_pad - int(6*scale), up_y), stats.get("net_up_str", "0 KB/s"), fill="#38bdf8", font=f_val, anchor="rt")
 
-        # Módulo Placa-Mãe & Ventoinha do Chassis
-        sys_y0 = net_y0 + int(avail_h * 0.28) + int(8 * scale)
-        self._draw_hud_bracket_card(draw, mid_x0 + m_pad, sys_y0, mid_x1 - m_pad, content_y1 - int(8*scale), scale, fill=(12, 18, 26), border=(100, 116, 139), bracket_len=6)
-        draw.text((mid_x0 + m_pad + int(8*scale), sys_y0 + int(6*scale)), "SENSORES DA MOTHERBOARD", fill="#cbd5e1", font=f_title, anchor="lt")
+        # Módulo Placa-Mãe
+        sys_y0 = net_y0 + int(avail_h * 0.28) + int(6 * scale)
+        self._draw_hud_bracket_card(draw, mid_x0 + m_pad, sys_y0, mid_x1 - m_pad, content_y1 - int(6*scale), scale, fill=(12, 18, 26), border=(100, 116, 139), bracket_len=6)
+        draw.text((mid_x0 + m_pad + int(6*scale), sys_y0 + int(5*scale)), "SENSORES DA MOTHERBOARD", fill="#cbd5e1", font=f_title, anchor="lt")
 
-        s1_y = sys_y0 + int(24 * scale)
-        draw.text((mid_x0 + m_pad + int(8*scale), s1_y), "TEMP SISTEMA:", fill=c_slate, font=f_small, anchor="lt")
-        draw.text((mid_x1 - m_pad - int(8*scale), s1_y), f"{stats.get('sys_temp', 32)}°C", fill=c_emerald, font=f_val, anchor="rt")
+        s1_y = sys_y0 + int(20 * scale)
+        draw.text((mid_x0 + m_pad + int(6*scale), s1_y), "TEMP SISTEMA:", fill=c_slate, font=f_small, anchor="lt")
+        draw.text((mid_x1 - m_pad - int(6*scale), s1_y), f"{stats.get('sys_temp', 32)}°C", fill=c_emerald, font=f_val, anchor="rt")
 
-        s2_y = s1_y + int(18 * scale)
-        draw.text((mid_x0 + m_pad + int(8*scale), s2_y), "CHASSIS FAN #1:", fill=c_slate, font=f_small, anchor="lt")
-        draw.text((mid_x1 - m_pad - int(8*scale), s2_y), f"{stats.get('chassis_fan', 1150)} RPM", fill=c_white, font=f_val, anchor="rt")
+        s2_y = s1_y + int(14 * scale)
+        draw.text((mid_x0 + m_pad + int(6*scale), s2_y), "CHASSIS FAN #1:", fill=c_slate, font=f_small, anchor="lt")
+        draw.text((mid_x1 - m_pad - int(6*scale), s2_y), f"{stats.get('chassis_fan', 1150)} RPM", fill=c_white, font=f_val, anchor="rt")
 
 
         # ==================== COLUNA DIREITA: GPU & DISCOS (NEON VERMELHO) ====================
-        # Cartão GPU Principal (Metade superior)
         self._draw_hud_bracket_card(draw, right_x0, content_y0, right_x1, content_y0 + cpu_card_h, scale, fill=(22, 10, 14), border=(255, 0, 85), bracket_len=12)
 
         # Mostrador Circular GPU
-        gauge_gpu_cx = right_x0 + int(col_w * 0.32)
+        gauge_gpu_cx = right_x0 + int(col_w * 0.30)
         gauge_gpu_cy = content_y0 + int(cpu_card_h * 0.52)
         c_temp_gpu = c_emerald if stats["gpu_temp"] < 55 else (c_amber if stats["gpu_temp"] < 75 else c_red)
         self._draw_circular_hud_meter(draw, gauge_gpu_cx, gauge_gpu_cy, gauge_r, stats["gpu_usage"], scale, label="GPU LOAD", val_str=f"{stats['gpu_usage']}%", temp_str=f"{stats['gpu_temp']}°C", primary_color=c_red, temp_color=c_temp_gpu)
 
         # Detalhes textuais GPU
-        gpu_det_x = right_x0 + int(col_w * 0.62)
-        gpu_det_y = content_y0 + int(16 * scale)
+        gpu_det_x = right_x0 + int(col_w * 0.58)
+        gpu_det_y = content_y0 + int(12 * scale)
         draw.text((gpu_det_x, gpu_det_y), stats.get("gpu_name", "RTX 4070 Ti"), fill=c_red, font=f_title, anchor="la")
-        gpu_det_y += int(16 * scale)
+        gpu_det_y += int(14 * scale)
         draw.text((gpu_det_x, gpu_det_y), f"CLOCK: {stats.get('gpu_clock', 2640)} MHz", fill=c_white, font=f_small, anchor="la")
-        gpu_det_y += int(14 * scale)
+        gpu_det_y += int(12 * scale)
         draw.text((gpu_det_x, gpu_det_y), f"POWER: {stats.get('gpu_power', 28.5)} W", fill=c_slate, font=f_small, anchor="la")
-        gpu_det_y += int(14 * scale)
+        gpu_det_y += int(12 * scale)
         draw.text((gpu_det_x, gpu_det_y), f"VRAM: {stats.get('gpu_vram_used', 2.1)}/{stats.get('gpu_vram_total', 12.0)} GB", fill=c_slate, font=f_small, anchor="la")
 
         # BARRA DE VELOCIDADE DA VENTOINHA DA GRÁFICA / GPU
-        gpu_fan_y0 = content_y0 + cpu_card_h + int(6 * scale)
+        gpu_fan_y0 = content_y0 + cpu_card_h + int(5 * scale)
         gpu_fan_pct = stats.get("gpu_fan_pct", 50)
         gpu_fan_rpm = stats.get("gpu_fan_rpm", 1450)
         gpu_fan_auto = stats.get("gpu_fan_auto", True)
-        self._draw_fan_speed_bar(draw, right_x0, gpu_fan_y0, col_w, cpu_fan_h, gpu_fan_pct, gpu_fan_rpm, gpu_fan_auto, title="⚡ GPU FAN SPEED (RTX 4070 Ti)", primary_color=c_red, dark_color=(45, 10, 18), scale=scale)
+        self._draw_fan_speed_bar(draw, right_x0, gpu_fan_y0, col_w, cpu_fan_h, gpu_fan_pct, gpu_fan_rpm, gpu_fan_auto, title="⚡ GPU FAN SPEED", primary_color=c_red, dark_color=(45, 10, 18), scale=scale)
 
-        # CARTÃO ARMAZENAMENTO / DISCOS (Parte inferior direita)
+        # CARTÃO ARMAZENAMENTO / DISCOS
         self._draw_hud_bracket_card(draw, right_x0, ram_y0, right_x1, content_y1, scale, fill=(22, 10, 14), border=(255, 0, 85), bracket_len=8)
 
-        draw.text((right_x0 + int(10*scale), ram_y0 + int(6*scale)), "ARMAZENAMENTO (C: & E:)", fill=c_red, font=f_title, anchor="lt")
-        draw.text((right_x1 - int(10*scale), ram_y0 + int(6*scale)), f"C: {stats['disk_c_pct']}%  E: {stats['disk_e_pct']}%", fill=c_white, font=f_val, anchor="rt")
+        disp_disk_title = "ARMAZENAMENTO" if col_w < 300 else "ARMAZENAMENTO (C: & E:)"
+        draw.text((right_x0 + int(8*scale), ram_y0 + int(5*scale)), disp_disk_title, fill=c_red, font=f_title, anchor="lt")
+        draw.text((right_x1 - int(8*scale), ram_y0 + int(5*scale)), f"C: {stats['disk_c_pct']}%  E: {stats['disk_e_pct']}%", fill=c_white, font=f_val, anchor="rt")
 
-        disk_bar_y = ram_y0 + int(24 * scale)
-        draw.rectangle([right_x0 + int(10*scale), disk_bar_y, right_x0 + int(10*scale) + ram_bar_w, disk_bar_y + ram_bar_h], fill=(32, 14, 18))
+        disk_bar_y = ram_y0 + int(20 * scale)
+        draw.rectangle([right_x0 + int(8*scale), disk_bar_y, right_x0 + int(8*scale) + ram_bar_w, disk_bar_y + ram_bar_h], fill=(32, 14, 18))
         disk_fill_w = int(ram_bar_w * (stats["disk_c_pct"] / 100.0))
         if disk_fill_w > 0:
-            draw.rectangle([right_x0 + int(10*scale), disk_bar_y, right_x0 + int(10*scale) + disk_fill_w, disk_bar_y + ram_bar_h], fill=c_red)
+            draw.rectangle([right_x0 + int(8*scale), disk_bar_y, right_x0 + int(8*scale) + disk_fill_w, disk_bar_y + ram_bar_h], fill=c_red)
 
-        draw.text((right_x0 + int(10*scale), disk_bar_y + ram_bar_h + int(4*scale)), f"I/O R: {stats.get('disk_read_str', '0 KB/s')}", fill=c_slate, font=f_micro, anchor="lt")
-        draw.text((right_x1 - int(10*scale), disk_bar_y + ram_bar_h + int(4*scale)), f"I/O W: {stats.get('disk_write_str', '0 KB/s')}", fill=c_slate, font=f_micro, anchor="rt")
+        draw.text((right_x0 + int(8*scale), disk_bar_y + ram_bar_h + int(3*scale)), f"I/O R: {stats.get('disk_read_str', '0 KB/s')}", fill=c_slate, font=f_micro, anchor="lt")
+        draw.text((right_x1 - int(8*scale), disk_bar_y + ram_bar_h + int(3*scale)), f"I/O W: {stats.get('disk_write_str', '0 KB/s')}", fill=c_slate, font=f_micro, anchor="rt")
 
         # ==================== BARRA INFERIOR / RODAPÉ ====================
         bot_y0 = height - bot_h - int(4 * scale)
         bot_y1 = height - int(4 * scale)
-        self._draw_hud_bracket_card(draw, int(8*scale), bot_y0, width - int(8*scale), bot_y1, scale, fill=(8, 12, 18), border=(70, 90, 120), bracket_len=6)
+        self._draw_hud_bracket_card(draw, int(6*scale), bot_y0, width - int(6*scale), bot_y1, scale, fill=(8, 12, 18), border=(70, 90, 120), bracket_len=6)
 
         mid_bot_y = (bot_y0 + bot_y1) // 2
-        draw.text((int(20 * scale), mid_bot_y), "⚡ CONTROLO TOTAL: BARRAS DE CPU E GPU ATIVAS  |  [F11] 2º ECRÃ  |  [T] OVERLAY HUD", fill=c_slate, font=f_micro, anchor="lm")
-        draw.text((width - int(20 * scale), mid_bot_y), "MONSTER TELEMETRIA // ED. CYBER NEON", fill=c_cyan, font=f_micro, anchor="rm")
+        footer_left = "⚡ CONTROLO TOTAL: BARRAS CPU & GPU  |  [F11] TELA CHEIA  |  [T] OVERLAY" if width >= 700 else "[F11] TELA CHEIA"
+        draw.text((int(16 * scale), mid_bot_y), footer_left, fill=c_slate, font=f_micro, anchor="lm")
+        draw.text((width - int(16 * scale), mid_bot_y), "MONSTER TELEMETRIA // DUAL NEON", fill=c_cyan, font=f_micro, anchor="rm")
 
         return img
 
@@ -3353,33 +3541,48 @@ class SmartCoolApp:
         return base
 
     def _update_canvas_display(self, stats):
-        """Atualiza o Canvas com renderização nativa de alta definição e alimenta o servidor Wi-Fi."""
-        cw = max(480, self.canvas.winfo_width())
-        ch = max(320, self.canvas.winfo_height())
+        """Atualiza o Canvas com renderização nativa e Auto-Fit universal (ajuste perfeito a qualquer ecrã/monitor)."""
+        cw = max(100, self.canvas.winfo_width())
+        ch = max(100, self.canvas.winfo_height())
 
         theme_info = self.themes.get(self.current_theme_name, {})
         layout = theme_info.get("layout", "ALL_SENSORS")
+        is_transparent = (layout == "TRANSPARENT_HUD" or self.transparent_mode_var.get())
 
-        if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER", "TRANSPARENT_HUD", "NEON_DUAL"):
-            display_frame = self.render_frame(stats, width=cw, height=ch)
-            self.preview_image = ImageTk.PhotoImage(display_frame)
-            self.canvas.delete("all")
-            self.canvas.create_image(0, 0, anchor=tk.NW, image=self.preview_image)
+        is_widescreen = layout in (
+            "ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT",
+            "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER",
+            "TRANSPARENT_HUD", "NEON_DUAL"
+        )
+        base_w = 1280 if is_widescreen else 480
+        base_h = 720 if is_widescreen else 320
+
+        # Auto-Ajuste Proporcional Inteligente (Auto-Fit sem distorções nem colisões)
+        fit_scale = min(cw / float(base_w), ch / float(base_h))
+        tw = max(160, int(base_w * fit_scale))
+        th = max(90, int(base_h * fit_scale))
+
+        # Renderiza o tema exatamente na sua proporção nativa
+        frame = self.render_frame(stats, width=tw, height=th)
+
+        # Se as dimensões coincidirem exatamente (ex: fullscreen 16:9), exibe direto
+        if tw == cw and th == ch:
+            display_frame = frame
         else:
-            frame_480 = self.render_frame(stats, width=480, height=320)
-            scale = min(cw / 480.0, ch / 320.0)
-            tw = max(480, int(480 * scale))
-            th = max(320, int(320 * scale))
-            display_frame = frame_480.resize((tw, th), Image.Resampling.LANCZOS)
-            self.preview_image = ImageTk.PhotoImage(display_frame)
-            self.canvas.delete("all")
+            # Preenche o fundo restante sem distorção (Chroma-Key ou preto #07090f)
+            bg_rgb = (1, 2, 3) if is_transparent else (7, 9, 15)
+            display_frame = Image.new("RGB", (cw, ch), bg_rgb)
             pos_x = (cw - tw) // 2
             pos_y = (ch - th) // 2
-            self.canvas.create_image(pos_x, pos_y, anchor=tk.NW, image=self.preview_image)
+            display_frame.paste(frame, (pos_x, pos_y))
+
+        self.preview_image = ImageTk.PhotoImage(display_frame)
+        self.canvas.delete("all")
+        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.preview_image)
 
         # Se a transmissão contínua estiver parada, envia o frame estático inicial para o servidor Wi-Fi
         if not self.running and self.wifi_enabled_var.get() and self.web_server.is_running:
-            wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER", "TRANSPARENT_HUD", "NEON_DUAL") else display_frame
+            wifi_frame = self.render_frame(stats, width=1280, height=720) if is_widescreen else frame
             self.web_server.update_frame(wifi_frame, stats)
 
     def update_preview(self):
