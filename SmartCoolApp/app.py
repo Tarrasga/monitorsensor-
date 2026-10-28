@@ -333,7 +333,10 @@ class SmartCoolApp:
         self._build_ui()
         self._refresh_devices()
 
-        # Atalhos de Teclado para 2º Ecrã e Transparência HUD
+        # Estado da Barra Lateral de Controlos
+        self.sidebar_visible = True
+
+        # Atalhos de Teclado para 2º Ecrã, Transparência HUD e Menu Lateral
         self.root.bind("<F11>", self._toggle_fullscreen)
         self.root.bind("<Escape>", self._exit_fullscreen)
         self.canvas.bind("<F11>", self._toggle_fullscreen)
@@ -342,6 +345,10 @@ class SmartCoolApp:
         self.root.bind("<T>", self._toggle_transparency_mode)
         self.canvas.bind("<t>", self._toggle_transparency_mode)
         self.canvas.bind("<T>", self._toggle_transparency_mode)
+        self.root.bind("<m>", self._toggle_sidebar)
+        self.root.bind("<M>", self._toggle_sidebar)
+        self.canvas.bind("<m>", self._toggle_sidebar)
+        self.canvas.bind("<M>", self._toggle_sidebar)
 
         # Renderizar primeiro frame
         self.update_preview()
@@ -388,6 +395,22 @@ class SmartCoolApp:
             bg="#0d111a"
         )
         subtitle.pack(side=tk.LEFT, padx=12)
+
+        # Botão para Encolher / Expandir Menu Lateral (Ficar só o Tema)
+        self.btn_toggle_sidebar = tk.Button(
+            self.header_frame,
+            text="◀ RECOLHER MENU (M)",
+            command=self._toggle_sidebar,
+            bg="#1e293b",
+            fg="#38bdf8",
+            activebackground="#2e3e56",
+            activeforeground="#38bdf8",
+            relief=tk.FLAT,
+            font=("Segoe UI", 9, "bold"),
+            padx=10,
+            pady=4
+        )
+        self.btn_toggle_sidebar.pack(side=tk.RIGHT, padx=(8, 0))
 
         # Botão de Tela Cheia para o 2º Ecrã
         self.btn_fullscreen = tk.Button(
@@ -479,6 +502,22 @@ class SmartCoolApp:
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.canvas.bind("<Configure>", self._on_canvas_resize)
 
+        # Botão Flutuante (quando o menu está recolhido e em modo "Só o Tema" / Transparente)
+        self.btn_floating_menu = tk.Button(
+            self.canvas,
+            text="☰ MOSTRAR MENU (M)",
+            command=self._toggle_sidebar,
+            bg="#1e293b",
+            fg="#39ff14",
+            activebackground="#0f172a",
+            activeforeground="#39ff14",
+            relief=tk.FLAT,
+            font=("Segoe UI", 8, "bold"),
+            padx=10,
+            pady=4,
+            cursor="hand2"
+        )
+
         # Suporte para arrastar a janela clicando no Canvas ou Cabeçalho
         self.canvas.bind("<ButtonPress-1>", self._on_drag_start)
         self.canvas.bind("<B1-Motion>", self._on_drag_motion)
@@ -505,6 +544,22 @@ class SmartCoolApp:
             ctrl_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
         ctrl_canvas.bind("<MouseWheel>", _on_ctrl_wheel)
         self.controls_inner.bind("<MouseWheel>", _on_ctrl_wheel)
+
+        # Botão Destaque: Encolher Menu Lateral (Ficar Só o Tema)
+        self.btn_collapse_ctrl = tk.Button(
+            self.controls_inner,
+            text="◀ RECOLHER MENU // SÓ O TEMA (M)",
+            command=self._toggle_sidebar,
+            bg="#1e293b",
+            fg="#39ff14",
+            activebackground="#0f172a",
+            activeforeground="#39ff14",
+            relief=tk.FLAT,
+            font=("Segoe UI", 9, "bold"),
+            pady=6,
+            cursor="hand2"
+        )
+        self.btn_collapse_ctrl.pack(fill=tk.X, pady=(0, 10))
 
         # Grupo: Seletor de Tema
         lbl_theme = tk.Label(self.controls_inner, text="ESCOLHA O TEMA:", font=("Segoe UI", 9, "bold"), fg="#e2e8f0", bg="#0d111a")
@@ -1125,8 +1180,12 @@ class SmartCoolApp:
             self.btn_fullscreen.config(text="⛶ EXPANDIR NESTE ECRÃ (F11)")
             self.header_frame.pack(fill=tk.X, before=self.content_frame)
             self.content_frame.config(padx=12, pady=10)
-            self.preview_col.config(padx=(0, 12))
-            self.controls_col.pack(side=tk.RIGHT, fill=tk.Y)
+            if self.sidebar_visible:
+                self.preview_col.pack_forget()
+                self.controls_col.pack(side=tk.RIGHT, fill=tk.Y)
+                self.preview_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 12))
+            else:
+                self.preview_col.pack_configure(padx=0)
             self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
             if self.saved_geometry:
                 self.root.geometry(self.saved_geometry)
@@ -1139,6 +1198,56 @@ class SmartCoolApp:
     def _exit_fullscreen(self, event=None):
         if self.is_fullscreen:
             self._toggle_fullscreen()
+        elif not self.sidebar_visible:
+            self._toggle_sidebar()
+
+    def _toggle_sidebar(self, event=None):
+        """Encolhe ou expande o menu lateral de controlos.
+        Se o modo transparente estiver ativo, esconde também o cabeçalho e rodapé
+        para ficar LITERAMENTE SÓ O TEMA (HUD puro transparente flutuante) sem tapar o 2º ecrã!
+        """
+        self.sidebar_visible = not self.sidebar_visible
+        t_info = self.themes.get(self.current_theme_name, {})
+        is_transparent = (self.transparent_mode_var.get() or t_info.get("layout") == "TRANSPARENT_HUD")
+
+        if not self.sidebar_visible:
+            # 1. Encolher menu lateral
+            self.controls_col.pack_forget()
+            self.preview_col.pack_configure(padx=0)
+            self.btn_toggle_sidebar.config(text="▶ MOSTRAR MENU (M)", fg="#39ff14")
+            if hasattr(self, 'btn_collapse_ctrl'):
+                self.btn_collapse_ctrl.config(text="▶ MOSTRAR MENU (M)", fg="#39ff14")
+
+            # 2. Se for transparente, oculta também cabeçalho e barra de estado para ficar SÓ O TEMA
+            if is_transparent:
+                self.header_frame.pack_forget()
+                self.status_bar.pack_forget()
+                self.content_frame.config(padx=0, pady=0)
+                # Exibir botão flutuante discreto no canto superior do Canvas para reabrir o menu
+                self.btn_floating_menu.place(relx=1.0, rely=0.0, anchor="ne", x=-10, y=10)
+            else:
+                self.btn_floating_menu.place_forget()
+
+            self.status_bar.config(text="Menu lateral recolhido. Pressione [M] ou clique em 'Mostrar Menu' para expandir.")
+        else:
+            # Restaurar menu lateral e moldura completa
+            self.btn_floating_menu.place_forget()
+            if not self.is_fullscreen:
+                self.header_frame.pack(fill=tk.X, before=self.content_frame)
+                self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+                self.content_frame.config(padx=12, pady=10)
+                self.preview_col.pack_forget()
+                self.controls_col.pack(side=tk.RIGHT, fill=tk.Y)
+                self.preview_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 12))
+
+            self.btn_toggle_sidebar.config(text="◀ RECOLHER MENU (M)", fg="#38bdf8")
+            if hasattr(self, 'btn_collapse_ctrl'):
+                self.btn_collapse_ctrl.config(text="◀ RECOLHER MENU // SÓ O TEMA (M)", fg="#39ff14")
+            self.status_bar.config(text="Menu lateral expandido.")
+
+        self.root.update_idletasks()
+        if self.last_stats:
+            self._update_canvas_display(self.last_stats)
 
     def _on_drag_start(self, event):
         """Regista as coordenadas iniciais ao clicar para arrastar a janela."""
@@ -1183,6 +1292,12 @@ class SmartCoolApp:
             self.canvas.config(bg=self.CHROMA_KEY_COLOR, highlightthickness=0)
             self.btn_transparency.config(text="✨ OVERLAY ATIVO (T)", fg="#10b981")
             self.status_bar.config(text="Modo Overlay Transparente ATIVO: Fundo invisível para não tapar o 2º ecrã!")
+            # Se o menu já estiver recolhido, oculta também cabeçalho/barra para ficar SÓ O TEMA
+            if not self.sidebar_visible and not self.is_fullscreen:
+                self.header_frame.pack_forget()
+                self.status_bar.pack_forget()
+                self.content_frame.config(padx=0, pady=0)
+                self.btn_floating_menu.place(relx=1.0, rely=0.0, anchor="ne", x=-10, y=10)
         else:
             try:
                 self.root.attributes("-transparentcolor", "")
@@ -1191,6 +1306,12 @@ class SmartCoolApp:
             self.canvas.config(bg="#07090f", highlightthickness=1)
             self.btn_transparency.config(text="✨ OVERLAY TRANSPARENTE (T)", fg="#00e5ff")
             self.status_bar.config(text="Modo transparente desativado. Fundo opaco restaurado.")
+            # Se o menu estiver recolhido mas o modo opaco foi restaurado, mostra cabeçalho e barra
+            if not self.sidebar_visible and not self.is_fullscreen:
+                self.btn_floating_menu.place_forget()
+                self.header_frame.pack(fill=tk.X, before=self.content_frame)
+                self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+                self.content_frame.config(padx=12, pady=10)
 
         if self.last_stats:
             self._update_canvas_display(self.last_stats)
