@@ -28,7 +28,8 @@ def get_user_desktop_path():
 def create_shortcut():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(base_dir)
-    target_bat = os.path.join(root_dir, "INICIAR_MONSTER_TELEMETRIA.bat")
+    target_exe = os.path.join(root_dir, "MonsterTelemetria.exe")
+    target_app = target_exe if os.path.exists(target_exe) else os.path.join(root_dir, "INICIAR_MONSTER_TELEMETRIA.bat")
     ico_path = os.path.join(base_dir, "assets", "monster_telemetria_icon.ico")
     if not os.path.exists(ico_path):
         ico_path = os.path.join(base_dir, "assets", "thermometer.ico")
@@ -64,7 +65,7 @@ def create_shortcut():
     ps_code = f'''
 $ws = New-Object -ComObject WScript.Shell
 $s = $ws.CreateShortcut("{new_lnk}")
-$s.TargetPath = "{target_bat}"
+$s.TargetPath = "{target_app}"
 $s.WorkingDirectory = "{root_dir}"
 $s.IconLocation = "{ico_path},0"
 $s.Description = "Monster Telemetria // 2º Ecrã, USB & Wi-Fi [TARRASGA]"
