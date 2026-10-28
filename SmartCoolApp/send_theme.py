@@ -6,6 +6,7 @@ Uso: python send_theme.py [monster_cans | monster_claw | rog | caminho_da_imagem
 import os
 import sys
 import time
+import json
 import struct
 from PIL import Image
 
@@ -85,6 +86,55 @@ elif target in ("monster_official", "official", "logo", "monster_telemetria", "e
         image_path = os.path.join(assets_dir, "preview_theme_monster_official.png")
 else:
     image_path = target
+
+# Atualizar config.json para manter o último tema usado na aplicação
+THEME_NAME_MAP = {
+    "sensors": "Master Telemetry (Todos os Sensores)",
+    "sensores": "Master Telemetry (Todos os Sensores)",
+    "master": "Master Telemetry (Todos os Sensores)",
+    "monster_cans": "Monster Energy (Com Latas)",
+    "cans": "Monster Energy (Com Latas)",
+    "monster_claw": "Monster Energy (Claw / Garra)",
+    "claw": "Monster Energy (Claw / Garra)",
+    "rog": "ROG Dark Gaming (TARRASGA)",
+    "tarrasga": "ROG Dark Gaming (TARRASGA)",
+    "speedometer": "Velocímetros de Carro (Instrument Cluster)",
+    "velocimetros": "Velocímetros de Carro (Instrument Cluster)",
+    "airplane": "Cockpit de Avião (Fighter Jet HUD)",
+    "aviao": "Cockpit de Avião (Fighter Jet HUD)",
+    "hud": "Cockpit de Avião (Fighter Jet HUD)",
+    "gt": "Cockpit de Carro GT (Racing Telemetry)",
+    "cockpit_gt": "Cockpit de Carro GT (Racing Telemetry)",
+    "xr2": "Ford Fiesta XR2 Mk2 (Classic Hot Hatch)",
+    "cs2": "Counter-Strike 2 (CS2 Tactical HUD)",
+    "pubg": "PUBG Battlegrounds (Erangel Survival HUD)",
+    "508": "Peugeot 508 SW (Digital i-Cockpit GT)",
+    "peugeot": "Peugeot 508 SW (Digital i-Cockpit GT)",
+    "mixer": "Mesa de Mistura DJ (Studio Audio Equalizer)",
+    "transparente": "HUD Overlay Transparente (Glass HUD)",
+    "transparent": "HUD Overlay Transparente (Glass HUD)",
+    "neon_dual": "Cyber Neon Dual (Azul & Vermelho)",
+    "monster_official": "Monster Telemetria (Logo Oficial)",
+    "official": "Monster Telemetria (Logo Oficial)",
+    "logo": "Monster Telemetria (Logo Oficial)",
+    "monster_telemetria": "Monster Telemetria (Logo Oficial)"
+}
+
+if target in THEME_NAME_MAP:
+    try:
+        cfg_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+        cfg_data = {}
+        if os.path.exists(cfg_file):
+            try:
+                with open(cfg_file, "r", encoding="utf-8") as f:
+                    cfg_data = json.load(f)
+            except Exception:
+                pass
+        cfg_data["last_theme"] = THEME_NAME_MAP[target]
+        with open(cfg_file, "w", encoding="utf-8") as f:
+            json.dump(cfg_data, f, indent=4, ensure_ascii=False)
+    except Exception:
+        pass
 
 if not os.path.exists(image_path):
     print(f"[ERRO] Imagem não encontrada: {image_path}")

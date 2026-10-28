@@ -13,6 +13,7 @@ import os
 import io
 import sys
 import time
+import json
 import math
 import threading
 import ctypes
@@ -256,7 +257,15 @@ class SmartCoolApp:
             }
         }
 
-        self.current_theme_name = "Master Telemetry (Todos os Sensores)"
+        # Configuração Persistente (Guardar e Lembrar o Último Tema Usado)
+        self.config_path = os.path.join(self.base_dir, "config.json")
+        self.settings = self._load_settings()
+
+        saved_theme = self.settings.get("last_theme", "Monster Telemetria (Logo Oficial)")
+        if saved_theme in self.themes:
+            self.current_theme_name = saved_theme
+        else:
+            self.current_theme_name = "Monster Telemetria (Logo Oficial)"
         self.bg_path = self.themes[self.current_theme_name]["file"]
 
         # Carregar Logótipo Oficial Monster Telemetria
@@ -350,11 +359,36 @@ class SmartCoolApp:
         self.canvas.bind("<m>", self._toggle_sidebar)
         self.canvas.bind("<M>", self._toggle_sidebar)
 
+        # Aplicar tema guardado na interface
+        self._on_theme_changed()
+
         # Renderizar primeiro frame
         self.update_preview()
 
         # Iniciar transmissão automaticamente após carregar a interface
         self.root.after(500, self._auto_start_stream)
+
+    def _load_settings(self):
+        """Carrega as definições guardadas da aplicação (último tema, etc.)."""
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        return data
+            except Exception as e:
+                print(f"[Config] Erro ao carregar config.json: {e}")
+        return {
+            "last_theme": "Monster Telemetria (Logo Oficial)"
+        }
+
+    def _save_settings(self):
+        """Grava as definições da aplicação para manter o último tema usado."""
+        try:
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump(self.settings, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            print(f"[Config] Erro ao gravar config.json: {e}")
 
     def _load_legacy_fonts(self):
         """Carrega fontes padrão do Windows para temas legados."""
@@ -566,7 +600,11 @@ class SmartCoolApp:
         lbl_theme.pack(anchor="w", pady=(0, 4))
 
         self.theme_combo = ttk.Combobox(self.controls_inner, state="readonly", values=list(self.themes.keys()))
-        self.theme_combo.current(0)
+        theme_keys = list(self.themes.keys())
+        if self.current_theme_name in theme_keys:
+            self.theme_combo.current(theme_keys.index(self.current_theme_name))
+        else:
+            self.theme_combo.current(0)
         self.theme_combo.pack(fill=tk.X, pady=(0, 6))
         self.theme_combo.bind("<<ComboboxSelected>>", self._on_theme_changed)
 
@@ -1322,6 +1360,11 @@ class SmartCoolApp:
         name = self.theme_combo.get()
         if name in self.themes:
             self.current_theme_name = name
+            # Guardar último tema usado para persistir entre reinícios
+            if hasattr(self, "settings"):
+                self.settings["last_theme"] = name
+                self._save_settings()
+
             t = self.themes[name]
             self.bg_path = t["file"]
             color = t["primary"]
