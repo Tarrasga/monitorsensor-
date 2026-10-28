@@ -29,7 +29,9 @@ def create_shortcut():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(base_dir)
     target_bat = os.path.join(root_dir, "INICIAR_MONSTER_TELEMETRIA.bat")
-    ico_path = os.path.join(base_dir, "assets", "thermometer.ico")
+    ico_path = os.path.join(base_dir, "assets", "monster_telemetria_icon.ico")
+    if not os.path.exists(ico_path):
+        ico_path = os.path.join(base_dir, "assets", "thermometer.ico")
     
     # 1. Limpar qualquer duplicado no Desktop Publico (o Windows une o Desktop do Utilizador e o Publico no ecra)
     pub_dir = os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "Desktop")

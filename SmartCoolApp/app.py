@@ -129,14 +129,20 @@ class SmartCoolApp:
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.assets_dir = os.path.join(self.base_dir, "assets")
 
-        ico_path = os.path.join(self.assets_dir, "thermometer.ico")
+        ico_path = os.path.join(self.assets_dir, "monster_telemetria_icon.ico")
+        if not os.path.exists(ico_path):
+            ico_path = os.path.join(self.assets_dir, "thermometer.ico")
         if os.path.exists(ico_path):
             try:
                 self.root.iconbitmap(ico_path)
             except Exception:
                 pass
             try:
-                self._app_icon_img = ImageTk.PhotoImage(file=ico_path)
+                png_ico = os.path.join(self.assets_dir, "monster_telemetria_icon.png")
+                if os.path.exists(png_ico):
+                    self._app_icon_img = ImageTk.PhotoImage(file=png_ico)
+                else:
+                    self._app_icon_img = ImageTk.PhotoImage(file=ico_path)
                 self.root.iconphoto(True, self._app_icon_img)
             except Exception:
                 pass
@@ -240,11 +246,28 @@ class SmartCoolApp:
                 "primary": "#00e5ff",
                 "dim": "#061826",
                 "accent": "#ff0055"
+            },
+            "Monster Telemetria (Logo Oficial)": {
+                "file": os.path.join(self.assets_dir, "preview_theme_monster_official.png"),
+                "layout": "MONSTER_OFFICIAL",
+                "primary": "#39ff14",
+                "dim": "#081c0e",
+                "accent": "#00e5ff"
             }
         }
 
         self.current_theme_name = "Master Telemetry (Todos os Sensores)"
         self.bg_path = self.themes[self.current_theme_name]["file"]
+
+        # Carregar Logótipo Oficial Monster Telemetria
+        official_logo_path = os.path.join(self.assets_dir, "monster_telemetria_logo.png")
+        if os.path.exists(official_logo_path):
+            try:
+                self.monster_official_logo = Image.open(official_logo_path).convert("RGBA")
+            except Exception:
+                self.monster_official_logo = None
+        else:
+            self.monster_official_logo = None
 
         # Carregar símbolo da garra
         claw_icon_path = os.path.join(self.assets_dir, "monster_claw_symbol.png")
@@ -1220,7 +1243,7 @@ class SmartCoolApp:
                 t_info = self.themes.get(name, {})
                 layout = t_info.get("layout", "ALL_SENSORS")
                 w_frame = self.render_frame(self.last_stats, width=1280, height=720) if layout in (
-                    "ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER", "TRANSPARENT_HUD", "NEON_DUAL"
+                    "ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER", "TRANSPARENT_HUD", "NEON_DUAL", "MONSTER_OFFICIAL"
                 ) else self.render_frame(self.last_stats, width=480, height=320)
                 self.web_server.update_frame(w_frame, self.last_stats)
             return name
@@ -3443,6 +3466,267 @@ class SmartCoolApp:
 
         return img
 
+    def render_monster_official_view(self, stats, width=1280, height=720):
+        """Renderiza o tema 'Monster Telemetria (Logo Oficial)'.
+        Layout widescreen topo-de-gama com o Logótipo Oficial Monster Telemetria ao centro:
+        - Lado Esquerdo: Toxic Neon Green (#39ff14) com CPU Load, Clock, Temperatura e Barra de Ventoinha do CPU
+        - Centro: Emblema Oficial Monster Telemetria, Perfis de Arrefecimento e Sensores Motherboard/Rede
+        - Lado Direito: Cyber Cyan (#00e5ff) com GPU RTX 4070 Ti, VRAM, Temperatura e Barra de Ventoinha da Gráfica
+        """
+        scale = min(width / 568.888, height / 320.0)
+        bg_file = os.path.join(self.assets_dir, "monster_telemetria_bg.jpg")
+        if os.path.exists(bg_file):
+            try:
+                base = Image.open(bg_file).convert("RGB")
+                if base.size != (width, height):
+                    base = base.resize((width, height), Image.Resampling.LANCZOS)
+                img = Image.blend(base, Image.new("RGB", (width, height), (5, 9, 7)), 0.30)
+            except Exception:
+                img = Image.new("RGB", (width, height), (5, 9, 7))
+        else:
+            img = Image.new("RGB", (width, height), (5, 9, 7))
+
+        draw = ImageDraw.Draw(img)
+
+        c_green = "#39ff14"
+        c_cyan = "#00e5ff"
+        c_slate = "#94a3b8"
+        c_white = "#f8fafc"
+        c_amber = "#f59e0b"
+        c_red = "#ff0055"
+
+        f_header = self._get_font("ui", 8.5, scale, bold=True)
+        f_clock = self._get_font("mono", 9.5, scale, bold=True)
+        f_title = self._get_font("ui", 7.5, scale, bold=True)
+        f_val = self._get_font("mono", 8.5, scale, bold=True)
+        f_small = self._get_font("ui", 7.0, scale, bold=False)
+        f_micro = self._get_font("mono", 6.5, scale, bold=False)
+
+        # 1. Barra Superior Cabeçalho
+        top_h = int(22 * min(1.3, scale))
+        self._draw_hud_bracket_card(draw, int(6*scale), int(4*scale), width - int(6*scale), top_h + int(4*scale), scale, fill=(6, 14, 9), border=c_green, bracket_len=8)
+        dot_cy = (int(4*scale) + top_h + int(4*scale)) // 2
+
+        # Lado Esquerdo Header
+        left_title = "MONSTER TELEMETRIA // EDIÇÃO OFICIAL" if width >= 650 else "MONSTER TELEMETRIA"
+        draw.ellipse([int(12*scale), dot_cy - int(2.5*scale), int(17*scale), dot_cy + int(2.5*scale)], fill=c_green)
+        draw.text((int(22*scale), dot_cy), left_title, fill=c_white, font=f_header, anchor="lm")
+        t_left_bbox = draw.textbbox((int(22*scale), dot_cy), left_title, font=f_header, anchor="lm")
+
+        # Lado Direito Header
+        right_info = f"RTX 4070 Ti // {stats.get('cpu_cores', '14C/20T')}" if width >= 700 else stats.get("gpu_name", "RTX 4070 Ti")
+        draw.ellipse([width - int(17*scale), dot_cy - int(2.5*scale), width - int(12*scale), dot_cy + int(2.5*scale)], fill=c_cyan)
+        draw.text((width - int(22*scale), dot_cy), right_info, fill="#a5f3fc", font=f_header, anchor="rm")
+        t_right_bbox = draw.textbbox((width - int(22*scale), dot_cy), right_info, font=f_header, anchor="rm")
+
+        # Centro Header: Relógio com deteção dinâmica de espaço livre
+        clock_str = stats.get("time", "12:00:00")
+        uptime_str = f"UPTIME {stats.get('uptime', '2h 15m')}"
+        center_text = f"{clock_str}   //   {uptime_str}" if width >= 800 else clock_str
+        c_bbox = draw.textbbox((width // 2, dot_cy), center_text, font=f_clock, anchor="mm")
+
+        if t_left_bbox[2] + int(20*scale) < c_bbox[0] and c_bbox[2] + int(20*scale) < t_right_bbox[0]:
+            draw.text((width // 2, dot_cy), center_text, fill=c_green, font=f_clock, anchor="mm")
+        else:
+            c_short_bbox = draw.textbbox((width // 2, dot_cy), clock_str, font=f_clock, anchor="mm")
+            if t_left_bbox[2] + int(8*scale) < c_short_bbox[0] and c_short_bbox[2] + int(8*scale) < t_right_bbox[0]:
+                draw.text((width // 2, dot_cy), clock_str, fill=c_green, font=f_clock, anchor="mm")
+
+        # 2. Dimensões das 3 Colunas: Esquerda (CPU - Verde), Centro (Logo & Hub), Direita (GPU - Cyan)
+        content_y0 = top_h + int(8 * scale)
+        bot_h = int(18 * min(1.2, scale))
+        content_y1 = height - bot_h - int(6 * scale)
+        avail_h = content_y1 - content_y0
+
+        col_gap = int(8 * scale)
+        margin_x = int(6 * scale)
+        col_w = (width - (margin_x * 2) - (col_gap * 2)) // 3
+
+        left_x0 = margin_x
+        left_x1 = left_x0 + col_w
+
+        mid_x0 = left_x1 + col_gap
+        mid_x1 = mid_x0 + col_w
+
+        right_x0 = mid_x1 + col_gap
+        right_x1 = width - margin_x
+
+        # ==================== COLUNA ESQUERDA: CPU & RAM (TOXIC GREEN) ====================
+        cpu_card_h = int(avail_h * 0.44)
+        self._draw_hud_bracket_card(draw, left_x0, content_y0, left_x1, content_y0 + cpu_card_h, scale, fill=(8, 16, 10), border=c_green, bracket_len=12)
+
+        gauge_r = min(32, int(cpu_card_h * 0.28))
+        gauge_cx = left_x0 + int(col_w * 0.30)
+        gauge_cy = content_y0 + int(cpu_card_h * 0.52)
+        c_temp_cpu = c_green if stats["cpu_temp"] < 60 else (c_amber if stats["cpu_temp"] < 75 else c_red)
+        self._draw_circular_hud_meter(draw, gauge_cx, gauge_cy, gauge_r, stats["cpu_usage"], scale, label="CPU LOAD", val_str=f"{stats['cpu_usage']}%", temp_str=f"{stats['cpu_temp']}°C", primary_color=c_green, temp_color=c_temp_cpu)
+
+        det_x = left_x0 + int(col_w * 0.58)
+        det_y = content_y0 + int(12 * scale)
+        draw.text((det_x, det_y), "INTEL CORE", fill=c_green, font=f_title, anchor="la")
+        det_y += int(14 * scale)
+        draw.text((det_x, det_y), f"CLOCK: {stats.get('cpu_ghz', 3.5)} GHz", fill=c_white, font=f_small, anchor="la")
+        det_y += int(12 * scale)
+        draw.text((det_x, det_y), f"POWER: {stats.get('cpu_power', 45)} W", fill=c_slate, font=f_small, anchor="la")
+        det_y += int(12 * scale)
+        draw.text((det_x, det_y), f"CORES: {stats.get('cpu_cores', '14C / 20T')}", fill=c_slate, font=f_small, anchor="la")
+
+        # BARRA VENTOINHA DO CPU (VERDE MONSTER)
+        cpu_fan_y0 = content_y0 + cpu_card_h + int(5 * scale)
+        cpu_fan_h = int(avail_h * 0.26)
+        cpu_fan_pct = stats.get("cpu_fan_pct", 60)
+        cpu_fan_rpm = stats.get("cpu_fan", 1750)
+        cpu_fan_auto = stats.get("cpu_fan_auto", True)
+        self._draw_fan_speed_bar(draw, left_x0, cpu_fan_y0, col_w, cpu_fan_h, cpu_fan_pct, cpu_fan_rpm, cpu_fan_auto, title="⚡ CPU FAN SPEED", primary_color=c_green, dark_color=(8, 28, 14), scale=scale)
+
+        # CARTÃO RAM
+        ram_y0 = cpu_fan_y0 + cpu_fan_h + int(5 * scale)
+        self._draw_hud_bracket_card(draw, left_x0, ram_y0, left_x1, content_y1, scale, fill=(8, 16, 10), border=c_green, bracket_len=8)
+
+        draw.text((left_x0 + int(8*scale), ram_y0 + int(5*scale)), "MEMÓRIA RAM DDR5", fill=c_green, font=f_title, anchor="lt")
+        draw.text((left_x1 - int(8*scale), ram_y0 + int(5*scale)), f"{stats['ram_usage']}%", fill=c_white, font=f_val, anchor="rt")
+
+        ram_bar_y = ram_y0 + int(20 * scale)
+        ram_bar_h = max(4, int(6 * scale))
+        ram_bar_w = col_w - int(16 * scale)
+        draw.rectangle([left_x0 + int(8*scale), ram_bar_y, left_x0 + int(8*scale) + ram_bar_w, ram_bar_y + ram_bar_h], fill=(10, 24, 14))
+        ram_fill_w = int(ram_bar_w * (stats["ram_usage"] / 100.0))
+        if ram_fill_w > 0:
+            draw.rectangle([left_x0 + int(8*scale), ram_bar_y, left_x0 + int(8*scale) + ram_fill_w, ram_bar_y + ram_bar_h], fill=c_green)
+
+        draw.text((left_x0 + int(8*scale), ram_bar_y + ram_bar_h + int(3*scale)), f"USADO: {stats['ram_used_gb']} GB", fill=c_slate, font=f_micro, anchor="lt")
+        draw.text((left_x1 - int(8*scale), ram_bar_y + ram_bar_h + int(3*scale)), f"TOTAL: {stats['ram_total_gb']} GB", fill=c_slate, font=f_micro, anchor="rt")
+
+        # ==================== COLUNA CENTRAL: LOGÓTIPO OFICIAL & HUB TELEMETRIA ====================
+        # Cartão Superior Central: LOGÓTIPO OFICIAL MONSTER TELEMETRIA
+        logo_card_h = int(avail_h * 0.44)
+        self._draw_hud_bracket_card(draw, mid_x0, content_y0, mid_x1, content_y0 + logo_card_h, scale, fill=(7, 14, 10), border=c_green, bracket_len=12)
+
+        if self.monster_official_logo:
+            try:
+                max_logo_dim = min(col_w - int(24 * scale), logo_card_h - int(34 * scale))
+                if max_logo_dim > 16:
+                    logo_resized = self.monster_official_logo.resize((max_logo_dim, max_logo_dim), Image.Resampling.LANCZOS)
+                    logo_x = mid_x0 + (col_w - max_logo_dim) // 2
+                    logo_y = content_y0 + int(6 * scale)
+                    img.paste(logo_resized, (logo_x, logo_y), logo_resized)
+                    
+                    sub_y = logo_y + max_logo_dim + int(3 * scale)
+                    badge_str = "MONSTER TELEMETRIA" if col_w < 260 else "★ MONSTER TELEMETRIA OFFICIAL ★"
+                    draw.text((mid_x0 + col_w // 2, sub_y), badge_str, fill=c_green, font=f_title, anchor="mt")
+            except Exception:
+                draw.text((mid_x0 + col_w // 2, content_y0 + logo_card_h // 2), "MONSTER TELEMETRIA", fill=c_green, font=f_header, anchor="mm")
+        else:
+            draw.text((mid_x0 + col_w // 2, content_y0 + logo_card_h // 2), "MONSTER TELEMETRIA", fill=c_green, font=f_header, anchor="mm")
+
+        # Módulo Perfis de Ventoinhas
+        m_pad = int(8 * scale)
+        prof_card_y0 = content_y0 + logo_card_h + int(5 * scale)
+        prof_card_h = int(avail_h * 0.26)
+        self._draw_hud_bracket_card(draw, mid_x0, prof_card_y0, mid_x1, prof_card_y0 + prof_card_h, scale, fill=(8, 14, 12), border=(40, 160, 90), bracket_len=8)
+
+        draw.text((mid_x0 + col_w // 2, prof_card_y0 + int(4*scale)), "PERFIL DE ARREFECIMENTO", fill="#6ee7b7", font=f_title, anchor="mt")
+
+        profiles = ["AUTO", "SILÊNCIO", "EQUILÍBRIO", "GAMING", "TURBO"] if col_w >= 280 else ["AUTO", "SIL", "EQU", "GAME", "MAX"]
+        avg_fan = (cpu_fan_pct + stats.get("gpu_fan_pct", 50)) // 2
+        if cpu_fan_auto and stats.get("gpu_fan_auto", True):
+            cur_prof = profiles[0]
+        elif avg_fan <= 40:
+            cur_prof = profiles[1]
+        elif avg_fan <= 60:
+            cur_prof = profiles[2]
+        elif avg_fan <= 85:
+            cur_prof = profiles[3]
+        else:
+            cur_prof = profiles[4]
+
+        prof_y1 = prof_card_y0 + int(18 * scale)
+        p_w = max(10, (col_w - (m_pad * 2) - (len(profiles) - 1) * int(3*scale)) // len(profiles))
+        for idx, p_name in enumerate(profiles):
+            px0 = mid_x0 + m_pad + idx * (p_w + int(3*scale))
+            px1 = px0 + p_w
+            py0 = prof_y1
+            py1 = py0 + int(14 * scale)
+            is_cur = (p_name == cur_prof)
+            bg_col = (57, 255, 20) if is_cur else (16, 26, 20)
+            fg_col = "#040d06" if is_cur else "#64748b"
+            draw.rectangle([px0, py0, px1, py1], fill=bg_col)
+            draw.text(((px0 + px1) // 2, (py0 + py1) // 2), p_name, fill=fg_col, font=self._get_font("ui", 6.0, scale, bold=True), anchor="mm")
+
+        stat_hub_y = prof_y1 + int(18 * scale)
+        draw.text((mid_x0 + m_pad, stat_hub_y), "TEMP MOTHERBOARD:", fill=c_slate, font=f_micro, anchor="lt")
+        draw.text((mid_x1 - m_pad, stat_hub_y), f"{stats.get('sys_temp', 32)}°C", fill=c_green, font=f_micro, anchor="rt")
+
+        # Módulo Rede e Motherboard (Inferior Central)
+        net_y0 = prof_card_y0 + prof_card_h + int(5 * scale)
+        self._draw_hud_bracket_card(draw, mid_x0, net_y0, mid_x1, content_y1, scale, fill=(8, 14, 12), border=c_cyan, bracket_len=8)
+
+        draw.text((mid_x0 + int(8*scale), net_y0 + int(4*scale)), "REDE & COMUNICAÇÃO", fill=c_cyan, font=f_title, anchor="lt")
+        draw.text((mid_x1 - int(8*scale), net_y0 + int(4*scale)), "STATUS: ATIVO", fill=c_green, font=f_micro, anchor="rt")
+
+        down_y = net_y0 + int(18 * scale)
+        draw.text((mid_x0 + int(8*scale), down_y), "▼ DOWNLOAD:", fill=c_slate, font=f_small, anchor="lt")
+        draw.text((mid_x1 - int(8*scale), down_y), stats.get("net_down_str", "0 KB/s"), fill=c_green, font=f_val, anchor="rt")
+
+        up_y = down_y + int(13 * scale)
+        draw.text((mid_x0 + int(8*scale), up_y), "▲ UPLOAD:", fill=c_slate, font=f_small, anchor="lt")
+        draw.text((mid_x1 - int(8*scale), up_y), stats.get("net_up_str", "0 KB/s"), fill=c_cyan, font=f_val, anchor="rt")
+
+        # ==================== COLUNA DIREITA: GPU & DISCOS (CYBER CYAN) ====================
+        self._draw_hud_bracket_card(draw, right_x0, content_y0, right_x1, content_y0 + cpu_card_h, scale, fill=(8, 14, 18), border=c_cyan, bracket_len=12)
+
+        gauge_gpu_cx = right_x0 + int(col_w * 0.30)
+        gauge_gpu_cy = content_y0 + int(cpu_card_h * 0.52)
+        c_temp_gpu = c_green if stats["gpu_temp"] < 55 else (c_amber if stats["gpu_temp"] < 75 else c_red)
+        self._draw_circular_hud_meter(draw, gauge_gpu_cx, gauge_gpu_cy, gauge_r, stats["gpu_usage"], scale, label="GPU LOAD", val_str=f"{stats['gpu_usage']}%", temp_str=f"{stats['gpu_temp']}°C", primary_color=c_cyan, temp_color=c_temp_gpu)
+
+        gpu_det_x = right_x0 + int(col_w * 0.58)
+        gpu_det_y = content_y0 + int(12 * scale)
+        draw.text((gpu_det_x, gpu_det_y), stats.get("gpu_name", "RTX 4070 Ti"), fill=c_cyan, font=f_title, anchor="la")
+        gpu_det_y += int(14 * scale)
+        draw.text((gpu_det_x, gpu_det_y), f"CLOCK: {stats.get('gpu_clock', 2640)} MHz", fill=c_white, font=f_small, anchor="la")
+        gpu_det_y += int(12 * scale)
+        draw.text((gpu_det_x, gpu_det_y), f"POWER: {stats.get('gpu_power', 28.5)} W", fill=c_slate, font=f_small, anchor="la")
+        gpu_det_y += int(12 * scale)
+        draw.text((gpu_det_x, gpu_det_y), f"VRAM: {stats.get('gpu_vram_used', 2.1)}/{stats.get('gpu_vram_total', 12.0)} GB", fill=c_slate, font=f_small, anchor="la")
+
+        # BARRA VENTOINHA DA GRÁFICA / GPU (CYBER CYAN)
+        gpu_fan_y0 = content_y0 + cpu_card_h + int(5 * scale)
+        gpu_fan_pct = stats.get("gpu_fan_pct", 50)
+        gpu_fan_rpm = stats.get("gpu_fan_rpm", 1450)
+        gpu_fan_auto = stats.get("gpu_fan_auto", True)
+        self._draw_fan_speed_bar(draw, right_x0, gpu_fan_y0, col_w, cpu_fan_h, gpu_fan_pct, gpu_fan_rpm, gpu_fan_auto, title="⚡ GPU FAN SPEED", primary_color=c_cyan, dark_color=(8, 24, 32), scale=scale)
+
+        # CARTÃO ARMAZENAMENTO / DISCOS
+        self._draw_hud_bracket_card(draw, right_x0, ram_y0, right_x1, content_y1, scale, fill=(8, 14, 18), border=c_cyan, bracket_len=8)
+
+        disp_disk_title = "ARMAZENAMENTO" if col_w < 300 else "ARMAZENAMENTO (C: & E:)"
+        draw.text((right_x0 + int(8*scale), ram_y0 + int(5*scale)), disp_disk_title, fill=c_cyan, font=f_title, anchor="lt")
+        draw.text((right_x1 - int(8*scale), ram_y0 + int(5*scale)), f"C: {stats['disk_c_pct']}%  E: {stats['disk_e_pct']}%", fill=c_white, font=f_val, anchor="rt")
+
+        disk_bar_y = ram_y0 + int(20 * scale)
+        draw.rectangle([right_x0 + int(8*scale), disk_bar_y, right_x0 + int(8*scale) + ram_bar_w, disk_bar_y + ram_bar_h], fill=(12, 24, 30))
+        disk_fill_w = int(ram_bar_w * (stats["disk_c_pct"] / 100.0))
+        if disk_fill_w > 0:
+            draw.rectangle([right_x0 + int(8*scale), disk_bar_y, right_x0 + int(8*scale) + disk_fill_w, disk_bar_y + ram_bar_h], fill=c_cyan)
+
+        draw.text((right_x0 + int(8*scale), disk_bar_y + ram_bar_h + int(3*scale)), f"I/O R: {stats.get('disk_read_str', '0 KB/s')}", fill=c_slate, font=f_micro, anchor="lt")
+        draw.text((right_x1 - int(8*scale), disk_bar_y + ram_bar_h + int(3*scale)), f"I/O W: {stats.get('disk_write_str', '0 KB/s')}", fill=c_slate, font=f_micro, anchor="rt")
+
+        # ==================== BARRA INFERIOR / RODAPÉ ====================
+        bot_y0 = height - bot_h - int(4 * scale)
+        bot_y1 = height - int(4 * scale)
+        self._draw_hud_bracket_card(draw, int(6*scale), bot_y0, width - int(6*scale), bot_y1, scale, fill=(6, 12, 9), border=c_green, bracket_len=6)
+
+        mid_bot_y = (bot_y0 + bot_y1) // 2
+        footer_left = "⚡ MONSTER TELEMETRIA  |  BARRAS VENTOINHAS CPU & GPU  |  [F11] TELA CHEIA  |  [T] OVERLAY" if width >= 750 else "[F11] TELA CHEIA  |  MONSTER TELEMETRIA"
+        draw.text((int(14*scale), mid_bot_y), footer_left, fill="#86efac", font=f_small, anchor="lm")
+
+        footer_right = f"FPS: {stats.get('fps', 144)}  |  DRIVER USB: {stats.get('driver_status', 'ONLINE')}" if width >= 650 else f"FPS: {stats.get('fps', 144)}"
+        draw.text((width - int(14*scale), mid_bot_y), footer_right, fill=c_cyan, font=f_small, anchor="rm")
+
+        return img
+
     def render_frame(self, stats, width=480, height=320):
         """Renderiza o frame solicitado na resolução desejada."""
         theme_info = self.themes.get(self.current_theme_name, self.themes["Master Telemetry (Todos os Sensores)"])
@@ -3470,6 +3754,8 @@ class SmartCoolApp:
             return self.render_transparent_hud_view(stats, width, height)
         elif layout == "NEON_DUAL":
             return self.render_neon_dual_view(stats, width, height)
+        elif layout == "MONSTER_OFFICIAL":
+            return self.render_monster_official_view(stats, width, height)
 
         # Temas Legados (480x320)
         if os.path.exists(self.bg_path):
@@ -3552,7 +3838,7 @@ class SmartCoolApp:
         is_widescreen = layout in (
             "ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT",
             "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER",
-            "TRANSPARENT_HUD", "NEON_DUAL"
+            "TRANSPARENT_HUD", "NEON_DUAL", "MONSTER_OFFICIAL"
         )
         base_w = 1280 if is_widescreen else 480
         base_h = 720 if is_widescreen else 320
@@ -3617,7 +3903,7 @@ class SmartCoolApp:
                     try:
                         theme_info = self.themes.get(self.current_theme_name, {})
                         layout = theme_info.get("layout", "ALL_SENSORS")
-                        wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER", "TRANSPARENT_HUD", "NEON_DUAL") else usb_frame
+                        wifi_frame = self.render_frame(stats, width=1280, height=720) if layout in ("ALL_SENSORS", "SPEEDOMETER", "AIRPLANE_COCKPIT", "GT_COCKPIT", "XR2_MK2", "CS2", "PUBG", "PEUGEOT_508", "DJ_MIXER", "TRANSPARENT_HUD", "NEON_DUAL", "MONSTER_OFFICIAL") else usb_frame
                         self.web_server.update_frame(wifi_frame, stats)
                     except Exception as we:
                         print(f"[App] Erro na frame Wi-Fi 720p: {we}")

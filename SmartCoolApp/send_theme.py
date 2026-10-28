@@ -79,6 +79,10 @@ elif target in ("neon_dual", "neon", "dual_neon", "azul_vermelho", "fans", "cybe
     image_path = os.path.join(assets_dir, "preview_theme_neon_dual_usb.png")
     if not os.path.exists(image_path):
         image_path = os.path.join(assets_dir, "preview_theme_neon_dual.png")
+elif target in ("monster_official", "official", "logo", "monster_telemetria", "edicao_oficial", "logo_oficial"):
+    image_path = os.path.join(assets_dir, "preview_theme_monster_official_usb.png")
+    if not os.path.exists(image_path):
+        image_path = os.path.join(assets_dir, "preview_theme_monster_official.png")
 else:
     image_path = target
 

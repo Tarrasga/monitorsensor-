@@ -5,7 +5,9 @@ import subprocess
 base_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(base_dir)
 assets_dir = os.path.join(base_dir, "assets")
-ico_path = os.path.join(assets_dir, "thermometer.ico")
+ico_path = os.path.join(assets_dir, "monster_telemetria_icon.ico")
+if not os.path.exists(ico_path):
+    ico_path = os.path.join(assets_dir, "thermometer.ico")
 
 appdata = os.environ.get("APPDATA", "")
 startup_dir = os.path.join(appdata, r"Microsoft\Windows\Start Menu\Programs\Startup")
