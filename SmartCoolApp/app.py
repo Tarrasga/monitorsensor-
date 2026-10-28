@@ -855,24 +855,6 @@ class SmartCoolApp:
         )
         btn_choose_bg.pack(fill=tk.X, pady=(0, 8))
 
-        # Grupo: Brilho do Ecrã USB
-        lbl_bright = tk.Label(self.controls_inner, text="BRILHO DO ECRÃ USB (%):", font=("Segoe UI", 8, "bold"), fg="#e2e8f0", bg="#0d111a")
-        lbl_bright.pack(anchor="w", pady=(0, 2))
-
-        self.bright_slider = tk.Scale(
-            self.controls_inner,
-            from_=0,
-            to=100,
-            orient=tk.HORIZONTAL,
-            bg="#0d111a",
-            fg="#ffffff",
-            highlightthickness=0,
-            troughcolor="#1e293b",
-            command=self._on_brightness_change
-        )
-        self.bright_slider.set(80)
-        self.bright_slider.pack(fill=tk.X, pady=(0, 10))
-
         # Botão Iniciar Transmissão USB & Wi-Fi
         self.btn_toggle = tk.Button(
             self.controls_inner,
@@ -1468,10 +1450,6 @@ class SmartCoolApp:
             self.bg_path = chosen
             self.auto_cycle_var.set(False)
             self.update_preview()
-
-    def _on_brightness_change(self, val):
-        if self.driver.is_connected:
-            self.driver.set_brightness(int(val))
 
     def _draw_flames(self, draw, x0, y0, x1, y1, flicker=0, scale=1.0):
         """Renderiza labaredas realistas de fogo no limite inferior do cartão que aquece."""

@@ -152,27 +152,8 @@ class SmartCoolDriver:
         self.connection_type = None
 
     def set_brightness(self, percent):
-        """Ajusta o nível de brilho se suportado pelo firmware."""
-        if not self.is_connected or self.connection_type != "USB" or not self.usb_dev:
-            return False
-        try:
-            # Comando de brilho SCSI AX206: nível 0 a 7
-            level = max(0, min(7, int((percent / 100.0) * 7)))
-            self.tag_counter += 1
-            cbw_header = struct.pack("<4sIIBB", b"USBC", self.tag_counter, 0, 0x00, 0)
-            cbw_cmd = bytearray(16)
-            cbw_cmd[0] = 0xCD
-            cbw_cmd[5] = 0x06
-            cbw_cmd[6] = 0x01
-            cbw_cmd[7] = 0x01
-            cbw_cmd[8] = level
-            cbw = cbw_header + bytes([16]) + bytes(cbw_cmd)
-            self.usb_dev.write(self.EP_OUT, cbw, timeout=1000)
-            # Ler CSW
-            self.usb_dev.read(self.EP_IN, 13, timeout=1000)
-            return True
-        except Exception:
-            return False
+        """Método de compatibilidade (desativado para prevenir colisões no barramento USB)."""
+        return True
 
     def _convert_image_rgb565_be(self, image: Image.Image) -> bytes:
         """Converte imagem PIL para bytes RGB565 Big-Endian (exigido pelo SmatCool)."""
