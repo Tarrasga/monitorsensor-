@@ -1,0 +1,38 @@
+{
+    "cpu_dial": {
+        "enabled": false,
+        "x": 40,
+        "y": 40
+    },
+    "gpu_dial": {
+        "enabled": false,
+        "x": -690,
+        "y": -2517
+    },
+    "ram_bar": {
+        "enabled": false,
+        "x": 1960,
+        "y": -357
+    },
+    "cpu_fan": {
+        "enabled": false
+    },
+    "gpu_fan": {
+        "enabled": false
+    },
+    "storage": {
+        "enabled": false
+    },
+    "network": {
+        "enabled": false
+    },
+    "cooling_profiles": {
+        "enabled": false
+    },
+    "monster_emblem": {
+        "enabled": false
+    },
+    "clock_uptime": {
+        "enabled": false
+    }
+}

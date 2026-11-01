@@ -25,6 +25,7 @@ from PIL import Image, ImageTk, ImageDraw, ImageFont
 from screen_driver import SmartCoolDriver
 from hardware_monitor import HardwareMonitor
 from web_server import TelemetryWebServer
+from floating_widgets import FloatingWidgetsManager
 
 user32 = ctypes.windll.user32
 
@@ -338,6 +339,9 @@ class SmartCoolApp:
         # Carregar fontes padrão para layouts legados
         self._load_legacy_fonts()
 
+        # Gestor de Sensores & Widgets Flutuantes Independentes (inicializar antes da UI)
+        self.widgets_mgr = FloatingWidgetsManager(self.root, self)
+
         # Construir UI Responsiva
         self._build_ui()
         self._refresh_devices()
@@ -358,6 +362,15 @@ class SmartCoolApp:
         self.root.bind("<M>", self._toggle_sidebar)
         self.canvas.bind("<m>", self._toggle_sidebar)
         self.canvas.bind("<M>", self._toggle_sidebar)
+
+        # Atalhos para o Gestor de Sensores Flutuantes
+        self.root.bind("<w>", lambda e: self.widgets_mgr.open_manager_window())
+        self.root.bind("<W>", lambda e: self.widgets_mgr.open_manager_window())
+        self.canvas.bind("<w>", lambda e: self.widgets_mgr.open_manager_window())
+        self.canvas.bind("<W>", lambda e: self.widgets_mgr.open_manager_window())
+
+        # Restaurar widgets que o utilizador deixou ligados
+        self.widgets_mgr.restore_active_widgets()
 
         # Aplicar tema guardado na interface
         self._on_theme_changed()
@@ -429,6 +442,22 @@ class SmartCoolApp:
             bg="#0d111a"
         )
         subtitle.pack(side=tk.LEFT, padx=12)
+
+        # Botão Gestor de Sensores & Widgets Flutuantes Independentes
+        self.btn_widgets_top = tk.Button(
+            self.header_frame,
+            text="🧩 SENSORES WIDGETS (W)",
+            command=self.widgets_mgr.open_manager_window,
+            bg="#1e293b",
+            fg="#39ff14",
+            activebackground="#2e3e56",
+            activeforeground="#39ff14",
+            relief=tk.FLAT,
+            font=("Segoe UI", 9, "bold"),
+            padx=10,
+            pady=4
+        )
+        self.btn_widgets_top.pack(side=tk.RIGHT, padx=(8, 0))
 
         # Botão para Encolher / Expandir Menu Lateral (Ficar só o Tema)
         self.btn_toggle_sidebar = tk.Button(
@@ -593,7 +622,23 @@ class SmartCoolApp:
             pady=6,
             cursor="hand2"
         )
-        self.btn_collapse_ctrl.pack(fill=tk.X, pady=(0, 10))
+        self.btn_collapse_ctrl.pack(fill=tk.X, pady=(0, 6))
+
+        # Botão Acesso Rápido aos Widgets Flutuantes
+        self.btn_widgets_side = tk.Button(
+            self.controls_inner,
+            text="🧩 SENSORES FLUTUANTES (WIDGETS)",
+            command=self.widgets_mgr.open_manager_window,
+            bg="#1e293b",
+            fg="#00e5ff",
+            activebackground="#0f172a",
+            activeforeground="#00e5ff",
+            relief=tk.FLAT,
+            font=("Segoe UI", 9, "bold"),
+            pady=6,
+            cursor="hand2"
+        )
+        self.btn_widgets_side.pack(fill=tk.X, pady=(0, 10))
 
         # Grupo: Seletor de Tema
         lbl_theme = tk.Label(self.controls_inner, text="ESCOLHA O TEMA:", font=("Segoe UI", 9, "bold"), fg="#e2e8f0", bg="#0d111a")
@@ -4056,6 +4101,10 @@ class SmartCoolApp:
 
                 # 6. Atualizar GUI no PC (Canvas)
                 self.root.after(0, self._update_canvas_display, stats)
+
+                # 6.1 Atualizar Widgets Flutuantes Independentes (se abertos)
+                if hasattr(self, "widgets_mgr"):
+                    self.root.after(0, self.widgets_mgr.update_all, stats)
 
                 # 7. Enviar para o ecrã USB físico se conectado
                 if self.driver.is_connected:
