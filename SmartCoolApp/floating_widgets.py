@@ -51,7 +51,21 @@ class FloatingWidgetWindow:
         self._drag_start_y = 0
 
     def show(self):
+        # Garantir que as coordenadas estão visíveis dentro de algum monitor ativo
+        try:
+            monitors = self.manager.get_monitors_list()
+            in_bounds = any(
+                (m["left"] <= self.x < m["left"] + m["width"]) and (m["top"] <= self.y < m["top"] + m["height"])
+                for m in monitors
+            )
+            if not in_bounds and monitors:
+                self.x = monitors[0]["left"] + 60
+                self.y = monitors[0]["top"] + 60
+        except Exception:
+            pass
+
         if self.window and tk.Toplevel.winfo_exists(self.window):
+            self.window.geometry(f"{self.width}x{self.height}+{self.x}+{self.y}")
             self.window.deiconify()
             self.window.lift()
             if self.is_topmost:

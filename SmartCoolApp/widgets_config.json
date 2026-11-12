@@ -1,56 +1,62 @@
 {
     "cpu_dial": {
         "enabled": true,
-        "x": 2727,
-        "y": 687,
-        "display_mode": "card"
+        "x": 2221,
+        "y": 523,
+        "display_mode": "ring"
     },
     "gpu_dial": {
         "enabled": true,
-        "x": 2728,
-        "y": 854,
-        "display_mode": "card"
+        "x": 2122,
+        "y": 526,
+        "display_mode": "ring"
     },
     "ram_bar": {
-        "enabled": false,
-        "x": 1960,
-        "y": -357,
-        "display_mode": "card"
+        "enabled": true,
+        "x": 2538,
+        "y": 530,
+        "display_mode": "ring"
     },
     "cpu_fan": {
-        "enabled": false,
-        "x": 2635,
-        "y": 362,
-        "display_mode": "card"
+        "enabled": true,
+        "x": 2432,
+        "y": 530,
+        "display_mode": "ring"
     },
     "gpu_fan": {
-        "enabled": false,
-        "x": 2636,
-        "y": 444,
-        "display_mode": "card"
+        "enabled": true,
+        "x": 2326,
+        "y": 530,
+        "display_mode": "ring"
     },
     "storage": {
-        "enabled": false,
-        "display_mode": "card"
+        "enabled": true,
+        "display_mode": "ring",
+        "x": 1910,
+        "y": 525
     },
     "network": {
-        "enabled": false,
-        "x": 1271,
-        "y": 453,
-        "display_mode": "card"
+        "enabled": true,
+        "x": 2641,
+        "y": 530,
+        "display_mode": "ring"
     },
     "cooling_profiles": {
-        "enabled": false,
-        "display_mode": "card"
+        "enabled": true,
+        "display_mode": "ring",
+        "x": 2748,
+        "y": 530
     },
     "monster_emblem": {
         "enabled": true,
-        "x": 2727,
-        "y": 1019,
-        "display_mode": "card"
+        "x": 2018,
+        "y": 527,
+        "display_mode": "ring"
     },
     "clock_uptime": {
-        "enabled": false,
-        "display_mode": "card"
+        "enabled": true,
+        "display_mode": "ring",
+        "x": 1777,
+        "y": -5
     }
 }
