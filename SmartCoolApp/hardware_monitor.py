@@ -44,6 +44,10 @@ class HardwareMonitor:
         self.last_net = psutil.net_io_counters() if HAS_PSUTIL else None
         self.last_disk = psutil.disk_io_counters() if HAS_PSUTIL else None
 
+        # Detetar nomes reais do Hardware no Windows (CPU e GPU universais para qualquer PC)
+        self.detected_cpu_name = self._detect_cpu_name()
+        self.detected_gpu_name = self._detect_gpu_name()
+
         # Dados estáticos da CPU
         if HAS_PSUTIL:
             phys = psutil.cpu_count(logical=False) or 8
@@ -51,6 +55,34 @@ class HardwareMonitor:
             self.cpu_cores_str = f"{phys}C / {logi}T"
         else:
             self.cpu_cores_str = "14C / 20T"
+
+    def _detect_cpu_name(self):
+        """Deteta o modelo exato do processador (Intel ou AMD) via registo do Windows."""
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+            val, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+            return val.strip()
+        except Exception:
+            return "Intel Core / AMD Ryzen"
+
+    def _detect_gpu_name(self):
+        """Deteta o modelo da placa gráfica (NVIDIA, AMD ou Intel) via registo do Windows."""
+        try:
+            import winreg
+            base_key = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+            for i in range(5):
+                try:
+                    key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, f"{base_key}\\{i:04d}")
+                    desc, _ = winreg.QueryValueEx(key, "DriverDesc")
+                    desc = desc.strip()
+                    if desc and not any(x in desc.lower() for x in ["virtual", "basic", "remote", "citrix", "parsec"]):
+                        return desc.replace("NVIDIA GeForce ", "").replace("AMD Radeon ", "").strip()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return "RTX 4070 Ti"
 
     def _init_wmi_clients(self):
         """Tenta ligar aos namespaces do LibreHardwareMonitor ou OpenHardwareMonitor."""
@@ -183,22 +215,43 @@ class HardwareMonitor:
             ram_total_gb = round(vm.total / (1024 ** 3), 1)
             ram_free_gb = round(vm.available / (1024 ** 3), 1)
 
-            # Discos
+            # Discos (Deteção Dinâmica de Qualquer PC: C:, D:, E:...)
+            drives_found = []
             try:
-                c_disk = psutil.disk_usage("C:\\")
-                disk_c_used = round(c_disk.used / (1024 ** 3), 1)
-                disk_c_total = round(c_disk.total / (1024 ** 3), 1)
-                disk_c_pct = int(round(c_disk.percent))
+                for p in psutil.disk_partitions(all=False):
+                    if p.fstype and 'cdrom' not in p.opts:
+                        dpath = p.mountpoint
+                        try:
+                            usage = psutil.disk_usage(dpath)
+                            drives_found.append({
+                                "letter": dpath[0].upper(),
+                                "used": round(usage.used / (1024 ** 3), 1),
+                                "total": round(usage.total / (1024 ** 3), 1),
+                                "pct": int(round(usage.percent))
+                            })
+                        except Exception:
+                            pass
             except Exception:
+                pass
+
+            # Disco Primário (habitualmente C:)
+            c_info = next((d for d in drives_found if d["letter"] == "C"), drives_found[0] if drives_found else None)
+            if c_info:
+                disk_c_used = c_info["used"]
+                disk_c_total = c_info["total"]
+                disk_c_pct = c_info["pct"]
+            else:
                 disk_c_used, disk_c_total, disk_c_pct = 780.0, 930.0, 84
 
-            try:
-                e_disk = psutil.disk_usage("E:\\")
-                disk_e_used = round(e_disk.used / (1024 ** 3), 1)
-                disk_e_total = round(e_disk.total / (1024 ** 3), 1)
-                disk_e_pct = int(round(e_disk.percent))
-            except Exception:
-                disk_e_used, disk_e_total, disk_e_pct = 1540.0, 1860.0, 83
+            # Disco Secundário (D:, E:, ou o próximo disponível no PC)
+            sec_drives = [d for d in drives_found if d["letter"] != (c_info["letter"] if c_info else "C")]
+            if sec_drives:
+                sec_info = next((d for d in sec_drives if d["letter"] == "E"), next((d for d in sec_drives if d["letter"] == "D"), sec_drives[0]))
+                disk_e_used = sec_info["used"]
+                disk_e_total = sec_info["total"]
+                disk_e_pct = sec_info["pct"]
+            else:
+                disk_e_used, disk_e_total, disk_e_pct = 0.0, 0.0, 0
 
             # Rede (Taxas)
             net_curr = psutil.net_io_counters()
@@ -238,8 +291,8 @@ class HardwareMonitor:
         sys_temp = 32
         chassis_fan = 1150
 
-        # GPU padrão
-        gpu_name = "RTX 4070 Ti"
+        # GPU padrão (detetada dinamicamente via registo ou fallback)
+        gpu_name = getattr(self, "detected_gpu_name", "GPU")
         gpu_temp = 42
         gpu_usage = 20
         gpu_fan = 0

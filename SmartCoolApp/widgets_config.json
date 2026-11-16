@@ -1,62 +1,62 @@
 {
     "cpu_dial": {
         "enabled": true,
-        "x": 2221,
-        "y": 523,
+        "x": 2211,
+        "y": 500,
         "display_mode": "ring"
     },
     "gpu_dial": {
         "enabled": true,
-        "x": 2122,
-        "y": 526,
+        "x": 2113,
+        "y": 499,
         "display_mode": "ring"
     },
     "ram_bar": {
         "enabled": true,
-        "x": 2538,
-        "y": 530,
+        "x": 2606,
+        "y": 505,
         "display_mode": "ring"
     },
     "cpu_fan": {
         "enabled": true,
-        "x": 2432,
-        "y": 530,
+        "x": 2408,
+        "y": 504,
         "display_mode": "ring"
     },
     "gpu_fan": {
         "enabled": true,
-        "x": 2326,
-        "y": 530,
+        "x": 2309,
+        "y": 503,
         "display_mode": "ring"
     },
     "storage": {
-        "enabled": true,
+        "enabled": false,
         "display_mode": "ring",
-        "x": 1910,
-        "y": 525
+        "x": 1899,
+        "y": 506
     },
     "network": {
         "enabled": true,
-        "x": 2641,
-        "y": 530,
+        "x": 2506,
+        "y": 504,
         "display_mode": "ring"
     },
     "cooling_profiles": {
-        "enabled": true,
+        "enabled": false,
         "display_mode": "ring",
-        "x": 2748,
-        "y": 530
+        "x": 2732,
+        "y": 499
     },
     "monster_emblem": {
         "enabled": true,
-        "x": 2018,
-        "y": 527,
+        "x": 2259,
+        "y": 422,
         "display_mode": "ring"
     },
     "clock_uptime": {
         "enabled": true,
         "display_mode": "ring",
-        "x": 1777,
-        "y": -5
+        "x": 2456,
+        "y": 425
     }
 }
