@@ -720,9 +720,10 @@ class TelemetryRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(data)
 
             elif self.path == '/icon.png':
-                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'monster_telemetria_icon.png')
+                base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+                icon_path = os.path.join(base_dir, 'assets', 'monster_telemetria_icon.png')
                 if not os.path.exists(icon_path):
-                    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'app_icon_512.png')
+                    icon_path = os.path.join(base_dir, 'assets', 'app_icon_512.png')
                 if os.path.exists(icon_path):
                     with open(icon_path, 'rb') as f:
                         icon_bytes = f.read()

@@ -287,7 +287,8 @@ class FloatingWidgetsManager:
     def __init__(self, root, app_ref):
         self.root = root
         self.app = app_ref
-        self.config_file = os.path.join(self.app.base_dir, "widgets_config.json")
+        data_dir = getattr(self.app, "user_data_dir", self.app.base_dir)
+        self.config_file = os.path.join(data_dir, "widgets_config.json")
         self.config = self._load_config()
         self.last_stats = None
         self.manager_win = None

@@ -128,8 +128,18 @@ class SmartCoolApp:
         except Exception:
             pass
 
-        self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        if getattr(sys, "frozen", False):
+            self.base_dir = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+            self.user_data_dir = os.path.dirname(sys.executable)
+        else:
+            self.base_dir = os.path.dirname(os.path.abspath(__file__))
+            self.user_data_dir = self.base_dir
+
         self.assets_dir = os.path.join(self.base_dir, "assets")
+        if not os.path.exists(self.assets_dir):
+            alt_assets = os.path.join(self.user_data_dir, "assets")
+            if os.path.exists(alt_assets):
+                self.assets_dir = alt_assets
 
         ico_path = os.path.join(self.assets_dir, "monster_telemetria_icon.ico")
         if not os.path.exists(ico_path):
@@ -259,7 +269,7 @@ class SmartCoolApp:
         }
 
         # Configuração Persistente (Guardar e Lembrar o Último Tema Usado)
-        self.config_path = os.path.join(self.base_dir, "config.json")
+        self.config_path = os.path.join(self.user_data_dir, "config.json")
         self.settings = self._load_settings()
 
         saved_theme = self.settings.get("last_theme", "Monster Telemetria (Logo Oficial)")
